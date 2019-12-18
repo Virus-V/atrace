@@ -1,13 +1,14 @@
 #ifndef _THREAD_H_
 #define _THREAD_H_
 
-#include "include/list.h"
+#include <sys/types.h>
+
 #include "include/common.h"
 #include "include/context.h"
 
 // 线程对象
 struct thread {
-    int tid;    // 线程id
+    pid_t tid;    // 线程id
     int state;  // 线程状态
     list_head context_chain;    // 该线程的调用上下文呢
     list_head thread_chain; // 所有线程

@@ -1,7 +1,6 @@
 #ifndef _BREAK_POINT_H_
 #define _BREAK_POINT_H_
 
-#include "include/list.h"
 #include "include/common.h"
 #include "include/object.h"
 

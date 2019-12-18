@@ -3,13 +3,16 @@
 #include <unistd.h> // read write open fclose readlink
 #include <fcntl.h>  // io flags
 #include <string.h>
-#include <stdint.h>
 #include <assert.h>
+#include <stdint.h>
+
+#include "include/common.h"
+#include "include/object.h"
 
 // 16进制字符串转二进制
 // 从low_byte转到high byte
 static int hex_to_int(const char *high_byte, const char *low_byte, uint64_t *data_ptr) {
-    uint64_t data = 0;
+    uint64_t   data = 0;
     const char hex[] = {};
 
     assert(data_ptr != NULL);
@@ -41,7 +44,7 @@ static int hex_to_int(const char *high_byte, const char *low_byte, uint64_t *dat
 // 返回下一个item的地址
 static const char *parse_mmap_range(const char *mmap, uint64_t *start_ptr, uint64_t *end_ptr){
     size_t end_pos = 0, sp_pos = 0;
-    char *range_str;
+    char   *range_str;
 
     assert(mmap != NULL);
     assert(start_ptr != NULL);
@@ -86,7 +89,7 @@ enum region_attr {
 // 解析内存区域的属性
 static const char *parse_mmap_attr(const char *mmap, uint8_t *attr){
     size_t end_pos = 0, curr_pos = 0;
-    char *attr_str;
+    char   *attr_str;
 
     assert(mmap != NULL);
     assert(attr != NULL);
@@ -131,7 +134,7 @@ static const char *parse_mmap_attr(const char *mmap, uint8_t *attr){
 // 解析inode
 static const char *parse_mmap_inode(const char *mmap, uint32_t *inode_ptr){
     size_t end_pos = 0;
-    char *inode_str;
+    char   *inode_str;
 
     assert(mmap != NULL);
     assert(inode_ptr != NULL);
@@ -166,7 +169,7 @@ static const char *parse_mmap_inode(const char *mmap, uint32_t *inode_ptr){
 // 用完释放
 static const char *parse_mmap_file(const char *mmap, char **file_ptr){
     size_t end_pos = 0;
-    char *file_str;
+    char   *file_str;
 
     assert(mmap != NULL);
     assert(file_ptr != NULL);
@@ -185,11 +188,11 @@ static const char *parse_mmap_file(const char *mmap, char **file_ptr){
 
 // 解析memory map
 int object_parse_mmap(const char *mmap){
-    size_t length = 0;
-    uint64_t start, end;
-    uint8_t attr = 0;
-    uint32_t inode = 0;
-    char *file = NULL;
+    size_t     length = 0;
+    uint64_t   start, end;
+    uint8_t    attr = 0;
+    uint32_t   inode = 0;
+    char       *file = NULL;
     const char *mmap_end;
 
     assert(mmap != NULL);
@@ -267,16 +270,71 @@ ERR_RET_1:
 
 // 获取当前执行二进制路径
 // 外部释放
-char *object_get_exe(void) {
+char *object_get_exe(int pid) {
     unsigned char buf[256];
     int rv;
-    if((rv = readlink("/proc/self/exe", buf, sizeof buf)) == -1){
-        perror("readlink");
+    char *path_buf = NULL, *path = NULL;
+
+    if((path_buf = malloc(4096)) == NULL){
+        perror("malloc");
         return NULL;
     }
+
+    snprintf(buf, sizeof buf, "/proc/%d/exe", pid);
+
+    if((rv = readlink(buf, path_buf, 4096)) == -1){
+        perror("readlink");
+        free(path_buf);
+        return NULL;
+    }
+
+    path = strdup(path_buf);
+    free(path_buf);
+
+    return path;
+}
+
+// 获取指定文件的入口点
+addr_t object_get_exe_entry_point(const char *name){
+    FILE *fp;
+    Elf32_Ehdr *ehdr;
+    addr_t ep;
+
+    assert(name != NULL);
+
+    fp = fopen(name, "rb");
+	if(fp == NULL){
+		perror("fopen");
+		return 0;
+	}
+
+    // Elf32和Elf64的header兼容
+	ehdr = (Elf32_Ehdr *)malloc(sizeof(Elf32_Ehdr));
+    if(ehdr == NULL){
+        perror("malloc");
+        fclose(fp);
+        return 0;
+    }
     
-    buf[rv] = 0;
-    return strdup(buf);
+	fread(ehdr, sizeof(Elf32_Ehdr), 1, fp);
+    fclose(fp);
+
+    // 检查ELF头
+    if(ehdr->e_ident[0] != 0x7f || 
+		ehdr->e_ident[1] != 'E' ||
+		ehdr->e_ident[2] != 'L' ||
+		ehdr->e_ident[3] != 'F')
+	{
+		fprintf(stderr, "%s is not a elf file.", name);
+        free(ehdr);
+		return 0;
+	}
+    
+    ep = (addr_t)ehdr->e_entry;
+
+    free(ehdr);
+
+    return ep;
 }
 
 int main(){
@@ -288,7 +346,7 @@ int main(){
     printf("%s\n", maps);
     object_parse_mmap(maps);
 
-    exe = object_get_exe();
+    exe = object_get_exe(0);
     if(!exe){
         free(maps);
         return 1;
