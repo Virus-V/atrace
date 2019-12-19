@@ -21,12 +21,17 @@ struct breakpoint {
 	const char *desc;	// 该断点的描述信息
 };
 
+// 构造断点指令
+instr_t arch_make_breakpoint(instr_t ori_instr);
+// 移除断点指令
+instr_t arch_remove_breakpoint(instr_t instr, instr_t ori_instr);
+
 // 增加断点
-int breakpoint_add();
+struct breakpoint *breakpoint_create(struct object *obj, uint64_t offset);
 // 删除断点
-int breakpoint_delete();
+void breakpoint_delete(struct breakpoint *bp);
 // 越过断点并删除断点
 int breakpoint_resume_delete();
 // 越过断点并保留断点
-int breakpoint_resume();
+int breakpoint_resume(struct breakpoint *bp);
 #endif

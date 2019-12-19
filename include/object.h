@@ -6,9 +6,16 @@
 #include "include/common.h"
 #include "include/breakpoint.h"
 
+// 区域属性
+enum region_attr {
+    REGN_ATTR_PRIVATE = 0x1 << 0,
+    REGN_ATTR_EXECUTE = 0x1 << 1,
+    REGN_ATTR_WRITE   = 0x1 << 2,
+    REGN_ATTR_READ    = 0x1 << 3,
+};
+
 // 二进制对象
 struct object {
-    int fd; // 打开的文件描述符
     const char *file_name;  // 文件名
     addr_t text_start, text_end;    // 代码段的开始和结束地址
     struct list_head breakpoint_chain;  // 该二进制文件对应的断点
@@ -19,7 +26,9 @@ struct object {
 char *object_get_exe(int pid);
 // 获取可执行文件的入口点
 addr_t object_get_exe_entry_point(const char *name);
-
-int object_init(int pid);
+// 加载进程的object
+int object_load(int pid);
+// 根据文件名查找object
+struct object *object_get_by_file(const char *filename);
 
 #endif

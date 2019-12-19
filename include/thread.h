@@ -10,8 +10,8 @@
 struct thread {
     pid_t tid;    // 线程id
     int state;  // 线程状态
-    list_head context_chain;    // 该线程的调用上下文呢
-    list_head thread_chain; // 所有线程
+    struct list_head context_chain;    // 该线程的调用上下文呢
+    struct list_head thread_chain; // 所有线程
 };
 
 // 新增一个线程

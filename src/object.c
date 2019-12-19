@@ -4,10 +4,12 @@
 #include <fcntl.h>  // io flags
 #include <string.h>
 #include <assert.h>
-#include <stdint.h>
 
 #include "include/common.h"
 #include "include/object.h"
+
+// Compile unit列表
+LIST_HEAD(objects);
 
 // 16进制字符串转二进制
 // 从low_byte转到high byte
@@ -78,14 +80,6 @@ static const char *parse_mmap_range(const char *mmap, uint64_t *start_ptr, uint6
     return mmap + end_pos + 1;
 }
 
-// 区域属性
-enum region_attr {
-    REGN_ATTR_PRIVATE = 0x1 << 0,
-    REGN_ATTR_EXECUTE = 0x1 << 1,
-    REGN_ATTR_WRITE   = 0x1 << 2,
-    REGN_ATTR_READ    = 0x1 << 3,
-};
-
 // 解析内存区域的属性
 static const char *parse_mmap_attr(const char *mmap, uint8_t *attr){
     size_t end_pos = 0, curr_pos = 0;
@@ -93,6 +87,7 @@ static const char *parse_mmap_attr(const char *mmap, uint8_t *attr){
 
     assert(mmap != NULL);
     assert(attr != NULL);
+    *attr = 0;
 
     // 找到下一个分隔符
     for(; mmap[end_pos] != ' '; end_pos++);
@@ -187,13 +182,14 @@ static const char *parse_mmap_file(const char *mmap, char **file_ptr){
 }
 
 // 解析memory map
-int object_parse_mmap(const char *mmap){
-    size_t     length = 0;
+static int object_parse_mmap(struct list_head *object_list, const char *mmap){
+    int        exists = 0;
     uint64_t   start, end;
     uint8_t    attr = 0;
     uint32_t   inode = 0;
     char       *file = NULL;
     const char *mmap_end;
+    struct object *obj, *curr_obj = NULL;
 
     assert(mmap != NULL);
 
@@ -202,38 +198,91 @@ int object_parse_mmap(const char *mmap){
     while(mmap != mmap_end){
         // 解析范围
         mmap = parse_mmap_range(mmap, &start, &end);
-        printf("start: %lX, end: %lX\n", start, end);
+        if(!mmap){
+            return -1;
+        }
+
         // 解析属性
         mmap = parse_mmap_attr(mmap, &attr);
-        printf("flag: %X\n", attr);
-        attr = 0;
+        if(!mmap){
+            return -1;
+        }
 
-        //解析offset 解析设备号 解析inode
+        //跳过offset和设备号, 解析inode
         mmap = parse_mmap_inode(mmap, &inode);
-        printf("inode: %d\n", inode);
+        if(!mmap){
+            return -1;
+        }
+
         // 解析文件名
         if (inode != 0) {
             mmap = parse_mmap_file(mmap, &file);
-            printf("file: %s\n", file);
+            if(!mmap){
+                return -1;
+            }
         }else{
             for(; *mmap != '\n'; mmap++);
+            file = NULL;
         }
-        // 到这个地方代表一行处理完了, mmap指向换行符
+
+        // 到这个地方代表一行解析完了, mmap指向换行符
         // 指向下一个条目
         mmap++;
+        
+        // 如果当前区域不是可执行的,则跳过该条目
+        if((attr & REGN_ATTR_EXECUTE) == 0) {
+            if(file) free(file);
+            file = NULL;
+            continue;
+        }
+        
+        // 跳过链表中已经存在的项
+        exists = 0;
+        list_for_each_entry(curr_obj, &objects, object_chain){
+            if(curr_obj->text_start == start && curr_obj->text_end == end){
+                exists = 1;
+                break;
+            }
+        }
+        if(exists){
+            continue;
+        }
+
+        // 创建新的object,并插入链表
+        obj = calloc(1, sizeof(struct object));
+        if(!obj){
+            return -2;
+        }
+
+        obj->text_start = start;
+        obj->text_end = end;
+        INIT_LIST_HEAD(&obj->breakpoint_chain);
+        INIT_LIST_HEAD(&obj->object_chain);
+
+        if(inode != 0){
+            obj->file_name = file;
+        }else{
+            obj->file_name = "<pseudo file>";
+        }
+
+        printf("add %s .text: 0x%lX-0x%lX\n", obj->file_name, obj->text_start, obj->text_end);
+
+        list_add(&obj->object_chain, &objects);
     }
-    printf("rest:%s\n", mmap);
+    return 0;
 }
 
 // 获取当前进程memory map
 // 外部释放
-char *object_get_mmap(void) {
-    unsigned char buf[64];
+static char *object_get_mmap(int pid) {
+    unsigned char buf[256];
     char *mmap_buf = NULL, *tmp = NULL;
     size_t mmap_buf_length = 1;
     int rv = 0, fd;
 
-    fd = open("/proc/self/maps", O_RDONLY);
+    snprintf(buf, sizeof buf, "/proc/%d/maps", pid);
+
+    fd = open(buf, O_RDONLY);
     if(fd == -1){
         perror("open");
         return NULL;
@@ -337,22 +386,52 @@ addr_t object_get_exe_entry_point(const char *name){
     return ep;
 }
 
-int main(){
-    char *maps, *exe;
-    maps = object_get_mmap();
+// 加载进程的object
+int object_load(int pid){
+    int rv;
+    // 获得进程memory map
+    char *maps = object_get_mmap(pid);
     if(!maps){
-        return 1;
+        return -1;
     }
-    printf("%s\n", maps);
-    object_parse_mmap(maps);
-
-    exe = object_get_exe(0);
-    if(!exe){
-        free(maps);
-        return 1;
+    // 解析memory map, 构造object链表
+    if((rv = object_parse_mmap(&objects, maps)) != 0){
+        printf("parse pid:%d memory map failed! %d\n", pid, rv);
+        return -1;
     }
-    printf("%s\n", exe);
-    free(maps);
-    free(exe);
     return 0;
 }
+
+// 根据文件名获取object
+struct object *object_get_by_file(const char *filename){
+    struct object *curr_obj;
+
+    assert(filename != NULL);
+
+    list_for_each_entry(curr_obj, &objects, object_chain){
+        if(strcmp(filename, curr_obj->file_name) == 0){
+            return curr_obj;
+        }
+    }
+    return NULL;
+}
+
+// int main(){
+//     char *maps, *exe;
+//     maps = object_get_mmap();
+//     if(!maps){
+//         return 1;
+//     }
+//     printf("%s\n", maps);
+//     object_parse_mmap(maps);
+
+//     exe = object_get_exe(0);
+//     if(!exe){
+//         free(maps);
+//         return 1;
+//     }
+//     printf("%s\n", exe);
+//     free(maps);
+//     free(exe);
+//     return 0;
+// }
