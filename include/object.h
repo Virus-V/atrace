@@ -23,11 +23,11 @@ struct object {
 };
 
 // 获取指定pid的可执行文件路径
-char *object_get_exe(int pid);
+char *object_get_exe(void);
 // 获取可执行文件的入口点
 addr_t object_get_exe_entry_point(const char *name);
 // 加载进程的object
-int object_load(int pid);
+int object_load(void);
 // 根据文件名查找object
 struct object *object_get_by_file(const char *filename);
 

@@ -11,6 +11,8 @@
 // Compile unit列表
 LIST_HEAD(objects);
 
+extern pid_t leader_pid;
+
 // 16进制字符串转二进制
 // 从low_byte转到high byte
 static int hex_to_int(const char *high_byte, const char *low_byte, uint64_t *data_ptr) {
@@ -267,20 +269,20 @@ static int object_parse_mmap(struct list_head *object_list, const char *mmap){
 
         printf("add %s .text: 0x%lX-0x%lX\n", obj->file_name, obj->text_start, obj->text_end);
 
-        list_add(&obj->object_chain, &objects);
+        list_add_tail(&obj->object_chain, &objects);
     }
     return 0;
 }
 
 // 获取当前进程memory map
 // 外部释放
-static char *object_get_mmap(int pid) {
+static char *object_get_mmap(void) {
     unsigned char buf[256];
     char *mmap_buf = NULL, *tmp = NULL;
     size_t mmap_buf_length = 1;
     int rv = 0, fd;
 
-    snprintf(buf, sizeof buf, "/proc/%d/maps", pid);
+    snprintf(buf, sizeof buf, "/proc/%d/maps", leader_pid);
 
     fd = open(buf, O_RDONLY);
     if(fd == -1){
@@ -319,7 +321,7 @@ ERR_RET_1:
 
 // 获取当前执行二进制路径
 // 外部释放
-char *object_get_exe(int pid) {
+char *object_get_exe(void) {
     unsigned char buf[256];
     int rv;
     char *path_buf = NULL, *path = NULL;
@@ -329,7 +331,7 @@ char *object_get_exe(int pid) {
         return NULL;
     }
 
-    snprintf(buf, sizeof buf, "/proc/%d/exe", pid);
+    snprintf(buf, sizeof buf, "/proc/%d/exe", leader_pid);
 
     if((rv = readlink(buf, path_buf, 4096)) == -1){
         perror("readlink");
@@ -387,16 +389,16 @@ addr_t object_get_exe_entry_point(const char *name){
 }
 
 // 加载进程的object
-int object_load(int pid){
+int object_load(){
     int rv;
     // 获得进程memory map
-    char *maps = object_get_mmap(pid);
+    char *maps = object_get_mmap();
     if(!maps){
         return -1;
     }
     // 解析memory map, 构造object链表
     if((rv = object_parse_mmap(&objects, maps)) != 0){
-        printf("parse pid:%d memory map failed! %d\n", pid, rv);
+        printf("parse profilee memory map failed! %d\n", rv);
         return -1;
     }
     return 0;

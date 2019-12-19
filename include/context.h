@@ -7,6 +7,7 @@
 // 上下文
 struct context {
     struct breakpoint *bkpts[2];    // 进入点,退出点
+    const char *desc;   // 上下文描述信息
     uint64_t utime_start, utime_end; // 用户时间
     uint64_t stime_start, stime_end; // 内核时间
     struct list_head context_chain; // 上下文链表
