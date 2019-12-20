@@ -107,11 +107,9 @@ int breakpoint_resume(struct breakpoint *bp, pid_t pid){
     // 等待该线程状态变化
     waitpid(pid, &wait_status, __WALL);
 
-    if (WIFEXITED(wait_status)) 
+    if (WIFEXITED(wait_status) || WIFSIGNALED(wait_status)) 
         return 0;
 
-    /* Re-enable the breakpoint and let the process run.
-    */
     breakpoint_enable(bp);
 
     return 0;

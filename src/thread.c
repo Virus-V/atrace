@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <sys/ptrace.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <errno.h>
@@ -28,6 +29,13 @@ struct thread *thread_add(pid_t pid, int status){
     return t;
 }
 
+static void __thread_delete(struct thread *t){
+    assert(t != NULL);
+    
+    list_del(&t->thread_chain);
+    free(t);
+}
+
 void thread_delete(pid_t pid){
     struct thread *curr, *curr_tmp;
 
@@ -36,8 +44,7 @@ void thread_delete(pid_t pid){
         if(curr->pid != pid){
             continue;
         }
-        list_del(&curr->thread_chain);
-        free(curr);
+        __thread_delete(curr);
         return;
     }
 
@@ -58,8 +65,6 @@ struct thread *thread_wait(pid_t pid){
         return NULL;
     }
 
-    assert(child_waited == pid);
-
     list_for_each_entry(curr, &threads, thread_chain){
         if(curr->pid != child_waited){
             continue;
@@ -72,14 +77,20 @@ struct thread *thread_wait(pid_t pid){
 }
 
 int thread_all_stop(void){
-    struct thread *curr;
+    struct thread *curr, *curr_tmp;
     pid_t child_waited;
     int rv;
 
     // 所有线程进入停机状态
-    list_for_each_entry(curr, &threads, thread_chain){
+    list_for_each_entry_safe(curr, curr_tmp, &threads, thread_chain){
         rv = kill(curr->pid, SIGTRAP);
         if(rv == -1){
+            // 处理退出情况
+            if(errno == ESRCH){
+                printf("pid %d not exist.\n", curr->pid);
+                __thread_delete(curr);
+                continue;
+            }
             perror("kill");
             return -1;
         }
@@ -88,6 +99,12 @@ int thread_all_stop(void){
             child_waited = waitpid(curr->pid, &curr->state, __WALL);
         } while (child_waited == -1 && errno == EINTR);
         if(child_waited == -1){
+            // 处理退出情况
+            if(errno == ECHILD){
+                printf("pid %d not exist.\n", curr->pid);
+                __thread_delete(curr);
+                continue;
+            }
             perror("waitpid");
             return -2;
         }
@@ -102,18 +119,43 @@ int thread_all_run(void){
 
     // 所有线程进入停机状态
     list_for_each_entry(curr, &threads, thread_chain){
-        rv = kill(curr->pid, SIGTRAP);
+        if (!WIFSTOPPED(curr->state)) {
+            continue;
+        }
+        
+        // 设置线程运行状态
+        rv = ptrace(PTRACE_CONT, curr->pid, 1, NULL);
         if(rv == -1){
-            perror("kill");
+            // 处理退出情况
+            if(errno == ESRCH){
+                printf("pid %d not exist.\n", curr->pid);
+                __thread_delete(curr);
+                continue;
+            }
+            perror("ptrace");
             return -1;
         }
         
+        // 等待进程启动 
         do {
-            child_waited = waitpid(curr->pid, &curr->state, __WALL);
+            child_waited = waitpid(curr->pid, &curr->state, WCONTINUED | __WALL);
         } while (child_waited == -1 && errno == EINTR);
         if(child_waited == -1){
+            // 处理退出情况
+            if(errno == ECHILD){
+                printf("pid %d not exist.\n", curr->pid);
+                __thread_delete(curr);
+                continue;
+            }
             perror("waitpid");
             return -2;
+        }
+        
+        assert(child_waited == curr->pid);
+
+        if(WIFCONTINUED(curr->state)){
+            printf("pid %d start success!\n", child_waited);
+            continue;
         }
     }
     return 0;

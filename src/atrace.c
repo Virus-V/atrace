@@ -24,14 +24,24 @@ int main(int argc, char *argv[]) {
 		execvp(argv[1], argv + 1); //这个路径需要更改
 		printf("child process start failed...\n");
 	}else{
-		// 等同于 waitpid(-1, &wstatus, 0); 
-		wait(NULL); //接收SIGTRAP信号
+		int child_status;
+
+		waitpid(-1, &child_status, 0); 
+
+		// 创建线程
+		if(thread_add(leader_pid, child_status) == NULL){
+			printf("create thread failed!\n");
+			exit(1);
+		}
+
 		long ptraceOption = PTRACE_O_TRACECLONE;
 		ptrace(PTRACE_SETOPTIONS, leader_pid, NULL, ptraceOption); //设置ptrace属性PTRACE_SETOPTIONS
+
 		// 获取子进程的可执行文件路径
 		object_load();
 		const char *exe_path = object_get_exe();
 		printf("exe_path: %s\n", exe_path);
+
 		// 根据路径获取它的入口点
 		addr_t entry_point = object_get_exe_entry_point(exe_path);
 		// 获取object对象
@@ -46,12 +56,20 @@ int main(int argc, char *argv[]) {
 		instr_t data = ptrace(PTRACE_PEEKTEXT, leader_pid, self_obj->text_start + entry_point, 0);
 		printf("entry text:%lX\n", data);
 
-		struct breakpoint *bp = breakpoint_create(self_obj, entry_point);	//entry_point
+		struct breakpoint *bp = breakpoint_create(self_obj, entry_point, BKPT_F_ENTER_CTX|BKPT_F_ENABLE);	//entry_point
 
 		data = ptrace(PTRACE_PEEKTEXT, leader_pid, self_obj->text_start + entry_point, 0);
 		printf("entry text bp:%lX\n", data);
 
 		// 获取子进程的memory map，获取所有动态库的路径和符号表
+		ptrace(PTRACE_CONT, leader_pid, NULL, NULL);
+		thread_wait(leader_pid);
+		// 刷新当前object
+		object_load();
+		// 越过断点并删除断点
+		breakpoint_resume(bp);
+		breakpoint_delete(bp);
+
 		ptrace(PTRACE_CONT, leader_pid, NULL, NULL);
 		while (1) {
 			printf("parent process wait child pid \n");
@@ -70,10 +88,9 @@ int main(int argc, char *argv[]) {
 				//新线程被创建完成后，收到的信号，或者遇到断点时
 				printf("task stop\n");
 				if (WSTOPSIG(status) == SIGTRAP) {
+					printf("reach break point\n");
 					breakpoint_resume(bp);
-				}
-				//breakpoint_resume(bp);
-				object_load();
+				};
 				ptrace(PTRACE_CONT, child_waited, 1, NULL);
 				continue;
 			}

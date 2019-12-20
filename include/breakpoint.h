@@ -25,8 +25,6 @@ instr_t arch_remove_breakpoint(instr_t instr, instr_t ori_instr);
 struct breakpoint *breakpoint_create(struct object *obj, uint64_t offset, uint32_t attr);
 // 删除断点
 void breakpoint_delete(struct breakpoint *bp);
-// 越过断点并删除断点
-int breakpoint_resume_delete();
-// 越过断点并保留断点
+// 越过断点
 int breakpoint_resume(struct breakpoint *bp);
 #endif
