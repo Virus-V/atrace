@@ -3,14 +3,16 @@
 #include <assert.h>
 #include <sys/ptrace.h>
 #include <sys/reg.h>
-#include <sys/user.h>
+
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <errno.h>
 
 #include "include/common.h"
 #include "include/breakpoint.h"
 
 extern pid_t leader_pid;
+extern struct list_head objects;
 
 // 使能一个断点
 static void breakpoint_enable(struct breakpoint *bp){
@@ -84,33 +86,52 @@ void breakpoint_delete(struct breakpoint *bp){
 }
 
 // 越过断点
-int breakpoint_resume(struct breakpoint *bp, pid_t pid){
-    struct user_regs_struct regs;
-    int wait_status;
+int breakpoint_resume(struct breakpoint *bp, struct thread *t){
 
-    ptrace(PTRACE_GETREGS, pid, 0, &regs);
+    assert(bp != NULL);
+    assert(t != NULL);
 
-    // 检查是否停在了指定的断点
-    // TODO 与平台相关，也与流水线深度相关
-    assert(regs.rip == (unsigned long) bp->address + 1);
-
-    // 恢复原来的值，单步越过断点
-    regs.rip = (long) bp->address;
-    ptrace(PTRACE_SETREGS, pid, 0, &regs);
+    if(arch_set_thread_pc(t, bp->address) < 0){
+        return -1;
+    }
 
     breakpoint_disable(bp);
 
-    if (ptrace(PTRACE_SINGLESTEP, pid, 0, 0)) {
-        perror("ptrace");
+    if(thread_single_step(t) < 0){
         return -1;
     }
-    // 等待该线程状态变化
-    waitpid(pid, &wait_status, __WALL);
-
-    if (WIFEXITED(wait_status) || WIFSIGNALED(wait_status)) 
-        return 0;
 
     breakpoint_enable(bp);
 
     return 0;
+}
+
+// 通过当前pc找到breakpoint
+struct breakpoint *breakpoint_find(struct thread *t){
+    struct object *curr;
+    struct breakpoint *bp = NULL;
+    addr_t bp_pc, curr_pc;
+
+    curr_pc = arch_get_thread_pc(t);
+    if(curr_pc == 0){
+        return NULL;
+    }
+    
+    bp_pc = arch_get_breakpoint_pc(curr_pc);
+
+    list_for_each_entry(curr, &objects, object_chain){
+        if(curr->text_start > bp_pc || curr->text_end < bp_pc){
+            continue;
+        }
+
+        // 找到对应的断点对象
+        list_for_each_entry(bp, &curr->breakpoint_chain, bkp_chain){
+            if(bp->address != bp_pc){
+                continue;
+            }
+
+            return bp;
+        }
+    }
+    return NULL;
 }

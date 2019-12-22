@@ -1,0 +1,69 @@
+对于线程的操作：
+	所有线程列表
+	所有线程进入到stop模式
+	所有线程进入到运行模式
+	单个线程进入到单步模式
+    等待线程状态，检测异常线程
+    静态 通过pid获取到线程对象
+
+符号相关函数：
+	加载符号（文件）
+	查找符号（字符串或者地址）
+	遍历符号（回调函数）
+	
+架构相关的操作：
+	获取函数返回地址，从栈中或者lr寄存器
+
+断点管理：
+	断点的位置
+	断点的原有指令
+	增加断点
+	删除断点
+	越过断点并删除断点
+	越过断点并保留断点
+	
+上下文管理：
+	当前线程的上下文信息：
+		进入该上下文时的时间，
+		上下文进入的断点
+	退出该上下文的条件，指向哪个断点
+	进入context
+	退出context
+	
+================================================================================
+// 线程操作
+struct thread {
+	list_head ctx_head;	// 该线程上下文链表的头
+	list_entry thread_chain;
+	uint32_t tid;
+	uint32_t state;	// 当前线程状态
+}
+
+// 断点相关记录
+struct breakpoint {
+	addr_t address;	// 断点位置
+	instr_t ori_instrction;	// 断点位置原来的指令
+	list_entry bkp_chain;	// 断点链表
+	enum breakpoint_type type;	// 是上下文入口断点还是出口断点
+	const char *desc;	// 该断点的描述信息
+}
+
+// 上下文相关记录
+struct context {
+	struct breakpoint *bkps[2];	// 上下文开始的断点和上下文结束的断点
+	uint64_t utime_start;	// 用户时间
+	uint64_t utime_end;
+	uint64_t stime_start;	// 内核时间
+	uint64_t stime_end;
+	
+	list_entry ctx_chain;
+}
+
+// 二进制文件结构
+struct object {
+	int fd;	// 文件描述符
+	addr_t text_start,text_end;	// 指令段范围，暂不考虑多个指令section
+	struct list_head breakpoint_chain;
+}
+	
+进入断点，找到当前pc对应的断点位置，
