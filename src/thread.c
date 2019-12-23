@@ -12,7 +12,7 @@
 // profilee的线程列表
 LIST_HEAD(threads);
 
-struct thread *thread_add(pid_t pid, int status){
+struct thread *thread_add(pid_t pid, int code, int status){
     struct thread *t = NULL;
 
     if((t = calloc(1, sizeof(struct thread))) == NULL){
@@ -21,7 +21,8 @@ struct thread *thread_add(pid_t pid, int status){
     }
 
     t->pid = pid;
-    t->state = status;
+    t->code = code;
+    t->status = status;
     INIT_LIST_HEAD(&t->context_chain);
     INIT_LIST_HEAD(&t->thread_chain);
     
@@ -52,23 +53,10 @@ struct thread *thread_get_by_pid(pid_t pid){
     return NULL;
 }
 
-// 释放pid对应的线程
-void thread_delete_pid(pid_t pid){
-    struct thread *curr;
-
-    // 找到pid对应的线程
-    curr = thread_get_by_pid(pid);
-    if(!curr){
-        printf("bug: no thread object was found for pid %d!\n", pid);
-    }else{
-        thread_delete(curr);
-    }
-}
-
 // 检测线程状态,记录线程状态
 // pid参数参考waitpid的手册
 // 返回null请检查errno
-struct thread *thread_wait(pid_t pid, int option){
+int thread_wait(struct thread *t, int option){
     int wait_status;
     struct thread *curr;
     pid_t child_waited;

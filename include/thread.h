@@ -10,10 +10,8 @@
 // 线程对象
 struct thread {
     pid_t pid;    // 线程id
-    //uint32_t flag;  // 线程属性
-    int state;  // 线程状态
-    int signal; // 传递给进程的信号
-    siginfo_t info; // 信号类型
+    int code;  // 线程状态码，0正在运行
+    int status; // 传递给进程的信号+事件，高8位是事件，低8位是信号
     struct list_head context_chain;    // 该线程的调用上下文呢
     struct list_head thread_chain; // 所有线程
 };
@@ -26,13 +24,12 @@ int arch_set_thread_pc(struct thread *t, addr_t pc);
 addr_t arch_get_return_pc(struct thread *t);
 
 // 新增一个线程
-struct thread *thread_add(pid_t pid, int status);
+struct thread *thread_add(pid_t pid, int code, int status);
 
 // 通过pid查找线程
 struct thread *thread_get_by_pid(pid_t pid);
 
 // 删除一个线程
-void thread_delete_pid(pid_t pid);
 void thread_delete(struct thread *t);
 
 // 线程进入stop模式
@@ -45,6 +42,6 @@ int thread_all_run(void);
 // 单个线程进入到单步模式
 int thread_one_singlestep(struct thread *t);
 // 等待线程状态变化
-struct thread *thread_wait(pid_t pid, int option);
+int thread_wait(struct thread *t, int option);
 
 #endif
