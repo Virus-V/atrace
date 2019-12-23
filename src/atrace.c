@@ -127,7 +127,7 @@ int run_profiler(struct thread *t){
 					printf("add new thread failed!\n");
 					exit(1);
 				}
-			} else {
+			} else {	// 断点
 				struct breakpoint *bp = NULL;
 				addr_t curr_pc;
 

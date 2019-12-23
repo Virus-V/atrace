@@ -2,6 +2,7 @@
 #define _THREAD_H_
 
 #include <sys/types.h>
+#include <signal.h> 
 
 #include "include/common.h"
 #include "include/context.h"
@@ -12,6 +13,7 @@ struct thread {
     //uint32_t flag;  // 线程属性
     int state;  // 线程状态
     int signal; // 传递给进程的信号
+    siginfo_t info; // 信号类型
     struct list_head context_chain;    // 该线程的调用上下文呢
     struct list_head thread_chain; // 所有线程
 };
