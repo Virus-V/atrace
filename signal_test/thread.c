@@ -1,4 +1,5 @@
-
+#include <stdio.h>
+#include <errno.h>
 #include <pthread.h>
 #include <assert.h>
 #include "thread.h"
@@ -17,10 +18,28 @@ thread_map_init(void)
 }
 
 // 初始化线程结构体
-void 
-thread_init(thread_t *thread)
+thread_t *
+thread_new(void)
 {
-    INIT_LIST_HEAD(&thread->thread_list_entry);
+    thread_t *thread = calloc(1, sizeof(thread_t));
+    if(!thread){
+      perror("calloc");
+      abort();
+    }
+
+    INIT_LIST_HEAD(&thread->thread_list_entry_);
+
+    return thread;
+}
+
+// 释放线程对象
+void
+thread_del(thread_t *thread)
+{
+    assert(thread != NULL);
+    assert(list_empty(&thread->thread_list_entry_));
+    
+    free(thread);
 }
 
 // 不加锁的查找
@@ -32,7 +51,7 @@ thread_map_find_internal(pid_t thread_id)
 
     head = thread_map + (thread_id % THREAD_MAP_SIZE);
 
-    list_for_each_entry(pos, head, thread_list_entry) {
+    list_for_each_entry(pos, head, thread_list_entry_) {
         if(pos->tid == thread_id){
             return pos;
         }
@@ -49,6 +68,7 @@ thread_map_add(thread_t *thread)
     thread_t *exist;
 
     assert(thread != NULL);
+    assert(list_empty(&thread->thread_list_entry_));
 
     pthread_rwlock_wrlock(&thread_map_lock);
     exist = thread_map_find_internal(thread->tid);
@@ -58,7 +78,7 @@ thread_map_add(thread_t *thread)
     }
 
     head = thread_map + (thread->tid % THREAD_MAP_SIZE);
-    list_add(&thread->thread_list_entry, head);
+    list_add(&thread->thread_list_entry_, head);
     pthread_rwlock_unlock(&thread_map_lock);
 
     return 0;
@@ -78,7 +98,7 @@ thread_map_del(pid_t thread_id)
         return NULL;
     }
 
-    list_del(&exist->thread_list_entry);
+    list_del(&exist->thread_list_entry_);
     pthread_rwlock_unlock(&thread_map_lock);
 
     return 0;

@@ -2,6 +2,7 @@
 #define _THREAD_H_
 
 #include <stdlib.h>
+#include "common.h"
 #include "list.h"
 
 /**
@@ -15,13 +16,14 @@
 typedef struct thread {
     pid_t tid;
     // context stack
-    struct list_head thread_list_entry;
+    struct list_head thread_list_entry_;
 } thread_t;
 
 // 初始化线程map
 void thread_map_init(void);
 
-void thread_init(thread_t *thread);
+thread_t *thread_new(void);
+void thread_del(thread_t *thread);
 
 // 增加线程map对象
 int thread_map_add(thread_t *thread);

@@ -10,7 +10,7 @@
 
 #define get_tid() syscall(SYS_gettid)
 
-#define MAX_THREAD 3
+#define MAX_THREAD 5
 
 volatile int exit_flag = 0;
 
@@ -45,10 +45,10 @@ void *thread_fun(void *arg) {
 
         assert(diff >= 0);
 
-        printf("%d: %d.%d - %d.%d (%dus)\n", i,
-            tv_before.tv_sec, tv_before.tv_usec,
-            tv_after.tv_sec, tv_after.tv_usec,
-            diff);
+        // printf("%d: %d.%d - %d.%d (%dus)\n", i,
+        //     tv_before.tv_sec, tv_before.tv_usec,
+        //     tv_after.tv_sec, tv_after.tv_usec,
+        //     diff);
 
         avg_delay[i] = (avg_delay[i] + diff) >> divider;
 

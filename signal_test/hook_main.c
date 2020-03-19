@@ -29,32 +29,20 @@ sigtrap_handler(int signo, siginfo_t *sinfo, void *context)
 
   thread = thread_map_find(thread_id);
   if (!thread) {
-    thread = calloc(1, sizeof(thread_t));
-    if(!thread){
-      perror("calloc");
-      abort();
-    }
-    thread_init(thread);
+    thread = thread_new();
     thread->tid = thread_id;
-
     thread_map_add(thread);
+    printf("new thread: %d\n", thread_id);
   }
 
-  
-
-
-
-  
   gettimeofday(&tv, NULL);
 
-  printf("%d: in handle: %d.%d\n", get_tid(), tv.tv_sec, tv.tv_usec);
-  printf("addr:%p\n", uc->uc_mcontext.gregs[REG_RIP]);
-
-  
+  // printf("%d: in handle: %d.%d\n", get_tid(), tv.tv_sec, tv.tv_usec);
+  // printf("addr:%p\n", uc->uc_mcontext.gregs[REG_RIP]);
 }
 
 // 设置断点信号处理函数
-static int 
+static void 
 set_sighandle(void) 
 {
   struct sigaction act;
@@ -67,10 +55,8 @@ set_sighandle(void)
 
   if (sigaction(SIGTRAP, &act, NULL) == -1) {
 		perror("sigaction()");
-		return -1;
+		abort();
 	}
-  
-  return 0;
 }
 
 /**

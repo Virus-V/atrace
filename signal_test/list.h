@@ -21,19 +21,7 @@
 #ifndef _LINUX_LIST_H
 #define _LINUX_LIST_H
 
-#define LIST_POISON1  ((void *) 0x00100100)
-#define LIST_POISON2  ((void *) 0x00200200)
-
-#undef offsetof
-#ifdef __compiler_offsetof
-#define offsetof(TYPE,MEMBER) __compiler_offsetof(TYPE,MEMBER)
-#else
-#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
-#endif
-
-#define container_of(ptr, type, member) ({                      \
-     const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
-    (type *)( (char *)__mptr - offsetof(type,member) );})
+#include "common.h"
 
 /*
  * Simple doubly linked list implementation.
@@ -135,8 +123,7 @@ static inline void __list_del(struct list_head * prev, struct list_head * next)
 static inline void list_del(struct list_head *entry)
 {
     __list_del(entry->prev, entry->next);
-    entry->next = LIST_POISON1;
-    entry->prev = LIST_POISON2;
+    INIT_LIST_HEAD(entry);
 }
 #else
 extern void list_del(struct list_head *entry);

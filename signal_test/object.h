@@ -1,10 +1,9 @@
-#ifndef _COMPILE_UNIT_H_
-#define _COMPILE_UNIT_H_
+#ifndef _OBJECT_H_
+#define _OBJECT_H_
 
 #include <elf.h>
-
-#include "include/common.h"
-#include "include/breakpoint.h"
+#include "common.h"
+#include "list.h"
 
 // 区域属性
 enum region_attr {
