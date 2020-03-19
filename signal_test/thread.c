@@ -1,0 +1,99 @@
+
+#include <pthread.h>
+#include <assert.h>
+#include "thread.h"
+
+pthread_rwlock_t thread_map_lock = PTHREAD_RWLOCK_INITIALIZER;
+static struct list_head thread_map[THREAD_MAP_SIZE];
+
+// 初始化线程map
+void 
+thread_map_init(void)
+{
+    int i;
+    for(i=0; i<THREAD_MAP_SIZE; i++) {
+        INIT_LIST_HEAD(thread_map + i);
+    }
+}
+
+// 初始化线程结构体
+void 
+thread_init(thread_t *thread)
+{
+    INIT_LIST_HEAD(&thread->thread_list_entry);
+}
+
+// 不加锁的查找
+static thread_t *
+thread_map_find_internal(pid_t thread_id)
+{
+    struct list_head *head;
+    thread_t *pos;
+
+    head = thread_map + (thread_id % THREAD_MAP_SIZE);
+
+    list_for_each_entry(pos, head, thread_list_entry) {
+        if(pos->tid == thread_id){
+            return pos;
+        }
+    }
+    
+    return NULL;
+}
+
+// 增加线程map对象
+int 
+thread_map_add(thread_t *thread)
+{
+    struct list_head *head;
+    thread_t *exist;
+
+    assert(thread != NULL);
+
+    pthread_rwlock_wrlock(&thread_map_lock);
+    exist = thread_map_find_internal(thread->tid);
+    if (exist != NULL){
+        pthread_rwlock_unlock(&thread_map_lock);
+        return -1;
+    }
+
+    head = thread_map + (thread->tid % THREAD_MAP_SIZE);
+    list_add(&thread->thread_list_entry, head);
+    pthread_rwlock_unlock(&thread_map_lock);
+
+    return 0;
+}
+
+// 从哈希表中删除, 并返回原来的对象
+thread_t *
+thread_map_del(pid_t thread_id)
+{
+    struct list_head *head;
+    thread_t *exist;
+
+    pthread_rwlock_wrlock(&thread_map_lock);
+    exist = thread_map_find_internal(thread_id);
+    if (exist != NULL){
+        pthread_rwlock_unlock(&thread_map_lock);
+        return NULL;
+    }
+
+    list_del(&exist->thread_list_entry);
+    pthread_rwlock_unlock(&thread_map_lock);
+
+    return 0;
+}
+
+// 查找线程对象
+thread_t *
+thread_map_find(pid_t thread_id)
+{
+    thread_t *pos;
+
+    pthread_rwlock_rdlock(&thread_map_lock);
+    pos = thread_map_find_internal(thread_id);
+    pthread_rwlock_unlock(&thread_map_lock);
+
+    return pos;
+}
+
