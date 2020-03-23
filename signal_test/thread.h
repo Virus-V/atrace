@@ -17,6 +17,11 @@ typedef struct thread {
     pid_t tid;
     // context stack
     struct list_head thread_list_entry_;
+    // 存放被断点指令，因为是在用户态，无法执行单步运行，所以
+    // 需要构造一段指令和栈，执行单个指令然后return，返回地址由栈
+    // 指定。栈复用当前线程
+    void *code_cache_;
+    long pg_size_;  // 页大小
 } thread_t;
 
 // 初始化线程map

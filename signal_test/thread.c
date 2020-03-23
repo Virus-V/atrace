@@ -2,13 +2,16 @@
 #include <errno.h>
 #include <pthread.h>
 #include <assert.h>
+#include <sys/mman.h>
+#include <unistd.h>
+
 #include "thread.h"
 
 pthread_rwlock_t thread_map_lock = PTHREAD_RWLOCK_INITIALIZER;
 static struct list_head thread_map[THREAD_MAP_SIZE];
 
 // 初始化线程map
-void 
+void
 thread_map_init(void)
 {
     int i;
@@ -27,6 +30,20 @@ thread_new(void)
       abort();
     }
 
+    thread->pg_size_ = sysconf(_SC_PAGESIZE);
+    assert(thread->pg_size_ > 0);
+    // 分配内存区域
+    thread->code_cache_ = mmap(
+        NULL, thread->pg_size_,
+        PROT_READ | PROT_WRITE | PROT_EXEC,
+        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0
+    );
+
+    if (!thread->code_cache_) {
+        perror("mmap");
+        abort();
+    }
+
     INIT_LIST_HEAD(&thread->thread_list_entry_);
 
     return thread;
@@ -38,7 +55,11 @@ thread_del(thread_t *thread)
 {
     assert(thread != NULL);
     assert(list_empty(&thread->thread_list_entry_));
-    
+    assert(thread->code_cache_ != NULL);
+
+    // 取消映射内存区域
+    munmap(thread->code_cache_, thread->pg_size_);
+
     free(thread);
 }
 
@@ -56,12 +77,12 @@ thread_map_find_internal(pid_t thread_id)
             return pos;
         }
     }
-    
+
     return NULL;
 }
 
 // 增加线程map对象
-int 
+int
 thread_map_add(thread_t *thread)
 {
     struct list_head *head;

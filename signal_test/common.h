@@ -18,6 +18,8 @@
   })
 
 // 表示一个地址
-typedef void *addr_t;
+typedef uintptr_t addr_t;
+// 储存一个指令
+typedef uint32_t instr_t;
 
 #endif
