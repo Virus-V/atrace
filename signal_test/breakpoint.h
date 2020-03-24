@@ -5,8 +5,7 @@
 #include "list.h"
 #include "rbtree.h"
 
-#include "object.h"
-
+typedef struct object object_t;
 /**
  * 断点其实是一个事件触发器,动态的插在程序中
  * 程序执行流执行到断点时,会触发该断点绑定的相应事件

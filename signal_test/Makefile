@@ -1,7 +1,7 @@
 # -fsanitize=address -fsanitize-recover=address
 all: libhook.so.1.0.0 test_main
 
-libhook.so.1.0.0: hook_main.c utils.c thread.c object.c
+libhook.so.1.0.0: hook_main.c utils.c thread.c object.c rbtree.c breakpoint.c
 	$(CC) -g -fPIC $^ -shared -I. -Wl,-soname,libhook.so.1 -o $@
 
 test_main: test_main.c

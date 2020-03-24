@@ -558,7 +558,7 @@ object_memory_lock(object_t *obj)
   int ret;
 
   ret = mprotect(
-    obj->text_start, obj->text_end - obj->text_start,
+    (void *)obj->text_start, obj->text_end - obj->text_start,
     PROT_READ | PROT_EXEC
   );
   if (ret == -1) {
@@ -567,7 +567,7 @@ object_memory_lock(object_t *obj)
   }
 
   // 刷新icache
-  __builtin___clear_cache(obj->text_start, obj->text_end);
+  __builtin___clear_cache((void *)obj->text_start, (void *)obj->text_end);
 
   return 0;
 }
@@ -581,7 +581,7 @@ object_memory_unlock(object_t *obj)
   int ret;
 
   ret = mprotect(
-    obj->text_start, obj->text_end - obj->text_start,
+    (void *)obj->text_start, obj->text_end - obj->text_start,
     PROT_READ | PROT_WRITE | PROT_EXEC
   );
   if (ret == -1) {

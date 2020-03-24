@@ -5,6 +5,7 @@
 #include <string.h>
 #include "common.h"
 #include "breakpoint.h"
+#include "object.h"
 
 // 所有断点在红黑树中
 // 使用基数树也可以,但是断点场景是查找次数远大于插入和删除次数
@@ -243,9 +244,9 @@ breakpoint_enable(breakpoint_t *bkpt)
   object_memory_unlock(bkpt->obj);
   // 替换断点指令
   // 读取原有指令, 记录到breakpoint对象, 写入断点指令到位置
-  bkpt->instruction = ACCESS_ONCE((instr_t *)bkpt->address);
+  bkpt->instruction = *((volatile instr_t *)bkpt->address);
   // 此处写入要是原子的, 也就是要发出一次总线请求
-  ACCESS_ONCE((instr_t *)bkpt->address) = (instr_t)0xD4200060;  // brk #0x03
+  *((volatile instr_t *)bkpt->address) = (instr_t)0xD4200060;  // brk #0x03
   // 增加写保护, 并flush icache
   object_memory_lock(bkpt->obj);
 
@@ -270,7 +271,7 @@ breakpoint_disable(breakpoint_t *bkpt)
   // 去除text地址写保护
   object_memory_unlock(bkpt->obj);
   // 此处写入要是原子的, 也就是要发出一次总线请求
-  ACCESS_ONCE((instr_t *)bkpt->address) = bkpt->instruction;
+  *((volatile instr_t *)bkpt->address) = bkpt->instruction;
   // 增加写保护, 并flush icache
   object_memory_lock(bkpt->obj);
 
