@@ -182,7 +182,7 @@ breakpoint_add(breakpoint_t *bkpt)
   pthread_mutex_lock(&obj->bpc_lock);
   list_add(&bkpt->breakpoint_chain, &obj->breakpoint_chain);
   bkpt->obj = obj;
-  pthread_mutex_lock(&obj->bpc_lock);
+  pthread_mutex_unlock(&obj->bpc_lock);
 
   return 0;
 }
