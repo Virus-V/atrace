@@ -208,7 +208,7 @@ breakpoint_remove(breakpoint_t *bkpt)
   pthread_mutex_lock(&obj->bpc_lock);
   list_del_init(&bkpt->breakpoint_chain);
   bkpt->obj = NULL;
-  pthread_mutex_lock(&obj->bpc_lock);
+  pthread_mutex_unlock(&obj->bpc_lock);
 
   // 从红黑树中删除
   bp = breakpoint_rb_delete(bkpt->address);
