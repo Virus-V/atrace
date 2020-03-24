@@ -68,7 +68,7 @@ breakpoint_t *breakpoint_find(addr_t addr);
 // 增加一个断点
 int breakpoint_add(breakpoint_t *bkpt);
 // 移除一个断点
-void breakpoint_remove(breakpoint_t *bkpt);
+int breakpoint_remove(breakpoint_t *bkpt);
 
 // 启用一个断点对象
 int breakpoint_enable(breakpoint_t *bkpt);

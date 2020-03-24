@@ -17,6 +17,13 @@
     (type *)((char *)__mptr - offsetof(type, member));                         \
   })
 
+#define __ACCESS_ONCE(x)                                                       \
+  ({                                                                           \
+    __maybe_unused typeof(x) __var = (__force typeof(x))0;                     \
+    (volatile typeof(x) *)&(x);                                                \
+  })
+#define ACCESS_ONCE(x) (*__ACCESS_ONCE(x))
+
 // 表示一个地址
 typedef uintptr_t addr_t;
 // 储存一个指令

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <pthread.h>
+#include <string.h>
 #include "common.h"
 #include "breakpoint.h"
 
@@ -88,7 +89,7 @@ breakpoint_rb_insert_internal(breakpoint_t *bkpt)
       tmp = &((*tmp)->rb_left);
     else if (bkpt->address > bp->address)
       tmp = &((*tmp)->rb_right);
-    else 
+    else
       return -1;
   }
 
@@ -150,7 +151,7 @@ breakpoint_find(addr_t addr)
 }
 
 // 增加一个断点
-int 
+int
 breakpoint_add(breakpoint_t *bkpt)
 {
   breakpoint_t *bp;
@@ -164,7 +165,7 @@ breakpoint_add(breakpoint_t *bkpt)
   if (!obj) {
     return -1;
   }
-  
+
   // 插入到红黑树中
   pthread_mutex_lock(&breakpoint_lock);
   bp = breakpoint_rb_find_internal(bkpt->address);
@@ -173,7 +174,7 @@ breakpoint_add(breakpoint_t *bkpt)
     return -1;
   }
 
-  breakpoint_rb_insert_internal(bkpt); 
+  breakpoint_rb_insert_internal(bkpt);
   pthread_mutex_unlock(&breakpoint_lock);
 
   // 加入到object中
@@ -186,7 +187,7 @@ breakpoint_add(breakpoint_t *bkpt)
 }
 
 // 移除一个断点
-void 
+int
 breakpoint_remove(breakpoint_t *bkpt)
 {
   object_t *obj;
@@ -195,7 +196,12 @@ breakpoint_remove(breakpoint_t *bkpt)
   assert(bkpt != NULL && bkpt->obj != NULL);
   assert(!list_empty(&bkpt->breakpoint_chain));
   assert(!RB_EMPTY_NODE(&bkpt->breakpoint_tree));
-  
+
+  // 如果breakpoint处于启用状态, 则返回失败
+  if (breakpoint_attr_flag_ENABLE(bkpt)) {
+    return -1;
+  }
+
   obj = bkpt->obj;
 
   pthread_mutex_lock(&obj->bpc_lock);
@@ -212,13 +218,13 @@ breakpoint_remove(breakpoint_t *bkpt)
 
 // 启用一个断点对象
 // 不可对一个断点并行调用
-int 
+int
 breakpoint_enable(breakpoint_t *bkpt)
 {
   breakpoint_t *bp;
 
   assert(bkpt != NULL && bkpt->obj != NULL);
-  
+
   // 如果断点不存在，则失败
   bp = breakpoint_find(bkpt->address);
   if (!bp || bp != bkpt) {
@@ -236,15 +242,18 @@ breakpoint_enable(breakpoint_t *bkpt)
   // 去除text地址写保护
   object_memory_unlock(bkpt->obj);
   // 替换断点指令
-
-  // 增加写保护
+  // 读取原有指令, 记录到breakpoint对象, 写入断点指令到位置
+  bkpt->instruction = ACCESS_ONCE((instr_t *)bkpt->address);
+  // 此处写入要是原子的, 也就是要发出一次总线请求
+  ACCESS_ONCE((instr_t *)bkpt->address) = (instr_t)0xD4200060;  // brk #0x03
+  // 增加写保护, 并flush icache
   object_memory_lock(bkpt->obj);
-  // 刷新icache
-  
+
+  return 0;
 }
 
 // 停用一个断点对象
-int 
+int
 breakpoint_disable(breakpoint_t *bkpt)
 {
   breakpoint_t *bp;
@@ -257,10 +266,21 @@ breakpoint_disable(breakpoint_t *bkpt)
     return -1;
   }
 
+  // 恢复原有的指令
+  // 去除text地址写保护
+  object_memory_unlock(bkpt->obj);
+  // 此处写入要是原子的, 也就是要发出一次总线请求
+  ACCESS_ONCE((instr_t *)bkpt->address) = bkpt->instruction;
+  // 增加写保护, 并flush icache
+  object_memory_lock(bkpt->obj);
+
   // XXX 此处是否要加锁保护
   if (!breakpoint_attr_flag_ENABLE(bkpt)) {
     return 0;
   }
+
   // 清除使能标志位
   breakpoint_attr_clr_ENABLE(bkpt);
+
+  return 0;
 }

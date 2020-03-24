@@ -11,7 +11,7 @@
 
 #define get_tid() syscall(SYS_gettid)
 
-#define MAX_THREAD 8
+#define MAX_THREAD 1
 
 volatile int exit_flag = 0;
 
@@ -58,7 +58,7 @@ void *thread_fun(void *arg) {
     uint64_t before, after, divider = 0;
 
     while(!exit_flag){
-        usleep(100000);
+        usleep(100);
 
         gettimeofday(&tv_before, NULL);
         //__asm__ __volatile__("int $0x3"); // x86
@@ -72,10 +72,10 @@ void *thread_fun(void *arg) {
 
         assert(diff >= 0);
 
-        printf("%d,%d: %d.%d - %d.%d (%dus)\n", i, tid,
-            tv_before.tv_sec, tv_before.tv_usec,
-            tv_after.tv_sec, tv_after.tv_usec,
-            diff);
+        // printf("%d: %d.%d - %d.%d (%dus)\n", i,
+        //     tv_before.tv_sec, tv_before.tv_usec,
+        //     tv_after.tv_sec, tv_after.tv_usec,
+        //     diff);
 
         avg_delay[i] = (avg_delay[i] + diff) >> divider;
 

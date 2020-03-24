@@ -565,7 +565,10 @@ object_memory_lock(object_t *obj)
     perror("mprotect");
     return -1;
   }
-  // TODO 刷新icache
+
+  // 刷新icache
+  __builtin___clear_cache(obj->text_start, obj->text_end);
+
   return 0;
 }
 
