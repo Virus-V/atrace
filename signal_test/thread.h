@@ -5,6 +5,8 @@
 #include "common.h"
 #include "list.h"
 
+typedef struct breakpoint breakpoint_t;
+
 /**
  * 线程hash map大小
  **/
@@ -15,6 +17,8 @@
  **/
 typedef struct thread {
     pid_t tid;
+    // 当前激活的断点
+    breakpoint_t *active_bp;
     // context stack
     struct list_head thread_list_entry_;
     // 存放被断点指令，因为是在用户态，无法执行单步运行，所以
@@ -36,5 +40,7 @@ int thread_map_add(thread_t *thread);
 thread_t *thread_map_del(pid_t thread_id);
 // 查找线程对象
 thread_t *thread_map_find(pid_t thread_id);
+// 线程绑定一个breakpoint
+void thread_active_breakpoint(thread_t *thread, breakpoint_t *bp);
 
 #endif

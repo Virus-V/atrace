@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "thread.h"
+#include "breakpoint.h"
 
 pthread_rwlock_t thread_map_lock = PTHREAD_RWLOCK_INITIALIZER;
 static struct list_head thread_map[THREAD_MAP_SIZE];
@@ -136,5 +137,22 @@ thread_map_find(pid_t thread_id)
     pthread_rwlock_unlock(&thread_map_lock);
 
     return pos;
+}
+
+// 线程绑定一个breakpoint
+void
+thread_active_breakpoint(thread_t *thread, breakpoint_t *bp)
+{
+    assert(thread != NULL);
+    assert(bp != NULL);
+
+    // 将原指令拷贝到code cache
+    *((volatile instr_t *)thread->code_cache_) = bp->instruction;
+    // 指令末尾增加断点指令
+    *((volatile instr_t *)thread->code_cache_ + 1) = (instr_t)0xD4200060;  // brk #0x03
+    // 将breakpoint 设置为当前线程的active bp
+    thread->active_bp = bp;
+    // 刷新icache
+    __builtin___clear_cache(thread->code_cache_, (void *)((unsigned char *)thread->code_cache_+thread->pg_size_));
 }
 

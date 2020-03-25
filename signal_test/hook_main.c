@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <string.h>
+#include <assert.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <ucontext.h>
@@ -60,6 +61,9 @@ sigtrap_handler(int signo, siginfo_t *sinfo, void *context)
   uc->uc_mcontext.pc += 4;
 }
 
+// 入口点断点对象
+static breakpoint_t *entry_bp = NULL;
+static int entry_hit = 0;
 /**
  * main入口点断点处理函数
  */
@@ -68,13 +72,36 @@ entrypoint_trap_handler(int signo, siginfo_t *sinfo, void *context)
 {
   struct timeval tv;
   ucontext_t *uc = (ucontext_t *)context;
+  pid_t thread_id = get_tid();
+  thread_t *thread = NULL;
 
   // 重新加载object
   object_load();
 
-  // 切换到trap handle
-  set_sighandle(sigtrap_handler);
-
+  thread = thread_map_find(thread_id);
+  if (!thread) {
+    thread = thread_new();
+    thread->tid = thread_id;
+    thread_map_add(thread);
+    printf("new thread: %d\n", thread_id);
+  }
+  assert(entry_bp != NULL);
+  // 如果触发过了entry point hook
+  if (entry_hit){
+    // 切换到trap handle
+    set_sighandle(sigtrap_handler);
+    thread->active_bp = NULL;
+    // 信号返回地址修正为断点指令的下一个指令
+    uc->uc_mcontext.pc = entry_bp->address + 4;
+    printf("single step finish..\n");
+  } else {
+    entry_hit = 1;
+    // 在当前线程上下文构建断点执行环境
+    thread_active_breakpoint(thread, entry_bp);
+    // 修正信号返回地址为线程断点上下文地址
+    uc->uc_mcontext.pc = thread->code_cache_;
+    printf("enter to single step..\n");
+  }
 }
 
 /**
@@ -85,7 +112,6 @@ __attribute__ ((constructor))
 lib_init(void)
 {
   addr_t entry_point;
-  breakpoint_t *entry_bp;
   // 初始化信号处理函数
   set_sighandle(entrypoint_trap_handler);
 
@@ -105,13 +131,13 @@ lib_init(void)
 
   // 增加断点
   if (breakpoint_add(entry_bp)) {
-    printf("add breakpoint failed!\n");
+    printf("hook entrypoint failed!\n");
     abort();
   }
 
   // 使能断点
   if (breakpoint_enable(entry_bp)) {
-    printf("enable breakpoint failed!\n");
+    printf("enable entrypoint hook failed!\n");
     abort();
   }
 
