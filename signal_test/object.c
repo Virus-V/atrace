@@ -278,6 +278,11 @@ object_parse_mmap(struct list_head *object_list, const char *mmap)
     // 指向下一个条目
     mmap++;
 
+    // 跳过所有匿名内存区域
+    if (inode == 0) {
+      continue;
+    }
+
     // 如果当前区域不是可执行的,则跳过该条目
     if ((attr & OBJ_ATTR_FLAG_EXECUTE) == 0) {
       if (file)
@@ -313,12 +318,6 @@ object_parse_mmap(struct list_head *object_list, const char *mmap)
         && (intptr_t)object_parse_mmap <= obj->text_end)
     {
       obj->text_attr |= OBJ_ATTR_FLAG_NO_BKPT;
-    }
-
-    if (inode != 0) {
-      obj->file_name = file;
-    } else {
-      obj->file_name = pseudo_file_ptr;
     }
 
     printf("add %s .text: 0x%lX-0x%lX, %X\n", obj->file_name, obj->text_start, obj->text_end, obj->text_attr);

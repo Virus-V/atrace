@@ -10,6 +10,8 @@
  **/
 #define THREAD_MAP_SIZE 64
 
+typedef struct breakpoint breakpoint_t;
+
 /**
  * 线程对象
  **/

@@ -144,6 +144,26 @@ lib_init(void)
     abort();
   }
 
+  // create breakpoint d503201f
+  do {
+    object_t *obj = entry_bp->obj;
+    breakpoint_t *bkp = breakpoint_new();
+    bkp->address = obj->text_start + 0xdac;
+    printf("patch address: %lx\n", bkp->address);
+
+    if (breakpoint_add(bkp)) {
+      printf("hook bkp failed!\n");
+      abort();
+    }
+
+    // 使能断点
+    if (breakpoint_enable(bkp)) {
+      printf("enable bkp hook failed!\n");
+      abort();
+    }
+
+  } while(0);
+
   printf("Library ready. \n");
 
   return;
