@@ -2,7 +2,6 @@
 #include <errno.h>
 #include <pthread.h>
 #include <assert.h>
-#include <sys/mman.h>
 #include <unistd.h>
 
 #include "thread.h"

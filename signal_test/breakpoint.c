@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <pthread.h>
 #include <string.h>
+#include <sys/mman.h>
+
 #include "common.h"
 #include "breakpoint.h"
 #include "object.h"
@@ -12,6 +14,83 @@
 // 所以在此场景红黑树和基数树没有太大区别
 static RB_ROOT(breakpoints);
 static pthread_mutex_t breakpoint_lock = PTHREAD_MUTEX_INITIALIZER;
+
+// 指令槽集合
+pthread_rwlock_t slot_sets_lock = PTHREAD_RWLOCK_INITIALIZER;
+static struct list_head slot_sets;
+
+void 
+slot_set_init(void)
+{
+  INIT_LIST_HEAD(&slot_sets);
+  slot_set_add();
+}
+
+void 
+slot_set_add(void)
+{
+  slot_set_t *slot;
+  void *map_ptr = MAP_FAILED;
+
+  slot = calloc(1, sizeof(slot_set_t));
+  if (!slot) {
+    perror("calloc");
+    abort();
+  }
+
+  memset(slot->free_slot, -1, sizeof(slot->free_slot));
+  pthread_mutex_init(&slot->lock, NULL);
+  INIT_LIST_HEAD(&slot->slot_set_list);
+
+  map_ptr = mmap(
+    NULL, SLOT_PAGE_SIZE,
+    PROT_READ | PROT_WRITE | PROT_EXEC,
+    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0
+  );
+
+  if (map_ptr == MAP_FAILED) {
+    perror("mmap");
+    abort();
+  }
+  
+  slot->slots = (uintptr_t)map_ptr;
+
+  // 插入到链表头
+  pthread_rwlock_wrlock(&slot_sets_lock);
+  list_add(&slot->slot_set_list, &slot_sets);
+  pthread_rwlock_unlock(&slot_sets_lock);
+}
+
+int
+slot_alloc(slot_set_t **slot, unsigned int *index)
+{
+  slot_set_t *curr;
+  int idx = 0, pos;
+  // 遍历slot_sets链表，找到第一个非空的slot_set
+  pthread_rwlock_rdlock(&slot_sets_lock);
+  list_for_each_entry(curr, &slot_sets, slot_set_list) {
+    if (curr->used_slot_count == SLOT_NUM) {
+      continue;
+    }
+
+    for (; idx<SLOT_MAP_LEN; idx++) {
+      if (curr->free_slot[idx] == 0) {
+        continue;
+      }
+      // TODO
+      pos = __builtin_ffs(curr->free_slot[idx]) + idx * UINT_BIT_NUM;
+    }
+
+    goto out;
+  }
+out:
+  pthread_rwlock_unlock(&slot_sets_lock);
+  // 从free_slot bitmap中找到第一个为1的位，然后返回索引
+  
+  // 判断索引是否越界
+  // 将位清零，然后返回相应的位
+  
+}
 
 breakpoint_t *
 breakpoint_new(void)

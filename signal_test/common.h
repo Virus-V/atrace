@@ -17,6 +17,13 @@
     (type *)((char *)__mptr - offsetof(type, member));                         \
   })
 
+// 页面大小
+#define SLOT_PAGE_SIZE 4096
+// 指令Slot占用的页个数
+#define SLOT_PAGE_NUM 2
+// slot大小
+#define SLOT_SIZE 8
+
 // 表示一个地址
 typedef uintptr_t addr_t;
 // 储存一个指令
