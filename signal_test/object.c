@@ -312,6 +312,7 @@ object_parse_mmap(struct list_head *object_list, const char *mmap)
     obj->text_start = (addr_t)start;
     obj->text_end = (addr_t)end;
     obj->text_attr = attr;
+    obj->file_name = file;
 
     // 判断代码段是否是自身库的
     if (obj->text_start <= (intptr_t)object_parse_mmap
@@ -387,6 +388,8 @@ object_get_self_exe(void)
     perror("malloc");
     return NULL;
   }
+
+  memset(path_buf, 0x0, 4096);
 
   if ((rv = readlink("/proc/self/exe", path_buf, 4096)) == -1) {
     perror("readlink");
