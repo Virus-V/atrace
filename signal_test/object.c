@@ -143,19 +143,19 @@ parse_mmap_attr(const char *mmap, uint8_t *attr)
   for (; curr_pos < end_pos; curr_pos++) {
     switch (attr_str[curr_pos]) {
     case 'r':
-      *attr |= REGN_ATTR_READ;
+      *attr |= OBJ_ATTR_FLAG_READ;
       break;
 
     case 'w':
-      *attr |= REGN_ATTR_WRITE;
+      *attr |= OBJ_ATTR_FLAG_WRITE;
       break;
 
     case 'x':
-      *attr |= REGN_ATTR_EXECUTE;
+      *attr |= OBJ_ATTR_FLAG_EXECUTE;
       break;
 
     case 'p':
-      *attr |= REGN_ATTR_PRIVATE;
+      *attr |= OBJ_ATTR_FLAG_PRIVATE;
       break;
 
     default:;
@@ -279,7 +279,7 @@ object_parse_mmap(struct list_head *object_list, const char *mmap)
     mmap++;
 
     // 如果当前区域不是可执行的,则跳过该条目
-    if ((attr & REGN_ATTR_EXECUTE) == 0) {
+    if ((attr & OBJ_ATTR_FLAG_EXECUTE) == 0) {
       if (file)
         free(file);
       file = NULL;
@@ -306,13 +306,13 @@ object_parse_mmap(struct list_head *object_list, const char *mmap)
     obj = object_new();
     obj->text_start = (addr_t)start;
     obj->text_end = (addr_t)end;
-    obj->text_mode_ = attr;
+    obj->text_attr = attr;
 
     // 判断代码段是否是自身库的
     if (obj->text_start <= (intptr_t)object_parse_mmap
         && (intptr_t)object_parse_mmap <= obj->text_end)
     {
-      obj->text_mode_ |= REGN_ATTR_NO_BKPT;
+      obj->text_attr |= OBJ_ATTR_FLAG_NO_BKPT;
     }
 
     if (inode != 0) {
@@ -321,7 +321,7 @@ object_parse_mmap(struct list_head *object_list, const char *mmap)
       obj->file_name = pseudo_file_ptr;
     }
 
-    printf("add %s .text: 0x%lX-0x%lX, %X\n", obj->file_name, obj->text_start, obj->text_end, obj->text_mode_);
+    printf("add %s .text: 0x%lX-0x%lX, %X\n", obj->file_name, obj->text_start, obj->text_end, obj->text_attr);
 
     pthread_mutex_lock(&object_lock);
     list_add_tail(&obj->object_chain, &objects);

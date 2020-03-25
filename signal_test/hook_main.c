@@ -75,9 +75,6 @@ entrypoint_trap_handler(int signo, siginfo_t *sinfo, void *context)
   pid_t thread_id = get_tid();
   thread_t *thread = NULL;
 
-  // 重新加载object
-  object_load();
-
   thread = thread_map_find(thread_id);
   if (!thread) {
     thread = thread_new();
@@ -85,6 +82,7 @@ entrypoint_trap_handler(int signo, siginfo_t *sinfo, void *context)
     thread_map_add(thread);
     printf("new thread: %d\n", thread_id);
   }
+
   assert(entry_bp != NULL);
   // 如果触发过了entry point hook
   if (entry_hit){
@@ -95,9 +93,14 @@ entrypoint_trap_handler(int signo, siginfo_t *sinfo, void *context)
     uc->uc_mcontext.pc = entry_bp->address + 4;
     printf("single step finish..\n");
   } else {
+    // 重新加载object
+    object_load();
+
     entry_hit = 1;
+    thread->active_bp = entry_bp;
+
     // 在当前线程上下文构建断点执行环境
-    thread_active_breakpoint(thread, entry_bp);
+    thread_active_breakpoint(thread);
     // 修正信号返回地址为线程断点上下文地址
     uc->uc_mcontext.pc = thread->code_cache_;
     printf("enter to single step..\n");

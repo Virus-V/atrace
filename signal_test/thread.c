@@ -141,17 +141,15 @@ thread_map_find(pid_t thread_id)
 
 // 线程绑定一个breakpoint
 void
-thread_active_breakpoint(thread_t *thread, breakpoint_t *bp)
+thread_active_breakpoint(thread_t *thread)
 {
     assert(thread != NULL);
-    assert(bp != NULL);
+    assert(thread->active_bp != NULL);
 
     // 将原指令拷贝到code cache
-    *((volatile instr_t *)thread->code_cache_) = bp->instruction;
+    *((volatile instr_t *)thread->code_cache_) = thread->active_bp->instruction;
     // 指令末尾增加断点指令
     *((volatile instr_t *)thread->code_cache_ + 1) = (instr_t)0xD4200060;  // brk #0x03
-    // 将breakpoint 设置为当前线程的active bp
-    thread->active_bp = bp;
     // 刷新icache
     __builtin___clear_cache(thread->code_cache_, (void *)((unsigned char *)thread->code_cache_+thread->pg_size_));
 }

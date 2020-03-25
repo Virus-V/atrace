@@ -167,6 +167,11 @@ breakpoint_add(breakpoint_t *bkpt)
     return -1;
   }
 
+  // object不支持打断点
+  if (object_attr_flag_NO_BKPT(obj)) {
+    return -1;
+  }
+
   // 插入到红黑树中
   pthread_mutex_lock(&breakpoint_lock);
   bp = breakpoint_rb_find_internal(bkpt->address);

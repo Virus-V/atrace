@@ -62,7 +62,8 @@ void *thread_fun(void *arg) {
 
         gettimeofday(&tv_before, NULL);
         //__asm__ __volatile__("int $0x3"); // x86
-        __asm__ __volatile__("brk #0x3");   // aarch64
+        //__asm__ __volatile__("brk #0x3");   // aarch64
+        __asm__ __volatile__("nop");   // aarch64
         gettimeofday(&tv_after, NULL);
 
         after = tv_after.tv_sec*1000000 + tv_after.tv_usec;
