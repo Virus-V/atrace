@@ -9,21 +9,42 @@ typedef struct object object_t;
 /**
  * 断点其实是一个事件触发器,动态的插在程序中
  * 程序执行流执行到断点时,会触发该断点绑定的相应事件
- *
+ *  __builtin_ffs
  **/
-struct breakpoint {
-  addr_t address;      // 断点位置
-  instr_t instruction; // 断点位置原来的指令
-  uint_least8_t attr;  // 断点属性
 
-  object_t *obj;                     // 该断点所处的object
-  struct rb_node breakpoint_tree;    // 通过红黑树找到该对象
+struct breakpoint_header {
+  addr_t address;                 // 断点位置
+  uint_least8_t attr;             // 断点属性
+  struct rb_node breakpoint_tree; // 通过红黑树找到该对象
+  // 是否要增加锁?
+};
+
+typedef struct breakpoint_return breakpoint_return_t;
+
+struct breakpoint {
+  // breakpoint header
+  struct breakpoint_header header_;
+
+  instr_t instruction; // 断点位置原来的指令
+  unsigned int instr_length; // 指令长度,x86下需要, ARM和AARCH64不需要该字段
+  unsigned int slot_index;  // 指令slot的索引
+  object_t *obj;             // 该断点所处的object
+  breakpoint_return_t *trace_return; // trace模式下的函数返回hook
   struct list_head breakpoint_chain; // 通过object找到该对象
 };
 typedef struct breakpoint breakpoint_t;
 
+// 函数trace的返回断点
+struct breakpoint_return {
+  // breakpoint header
+  struct breakpoint_header header_;
+
+  breakpoint_t *trace_enter; // 该trace的进入点
+};
+
 /**
  * 断点属性标志
+ * no_slot: 该断点没有指令slot, 需要模拟指令行为
  * event: 事件类型的断点,执行到它时触发,打印触发时间,记录触发次数
  * trace: 跟踪类型的断点,一般跟踪函数执行的时间,该断点一般在函数开头,
  *        函数进入和返回时,打印时间,并计算时间差。（实际上，一定要在函数开头，如果一个函数中出现两个trace的断点，
@@ -33,7 +54,8 @@ typedef struct breakpoint breakpoint_t;
 #define BKPT_ATTR(F)                                                           \
   F(ENABLE)                                                                    \
   F(EVENT)                                                                     \
-  F(TRACE)
+  F(TRACE)                                                                     \
+  F(NO_SLOT)
 
 #define BKPT_ATTR_OFFSET(name) BKPT_ATTR_OFFSET_##name,
 enum __breakpoint_attr_offset {
