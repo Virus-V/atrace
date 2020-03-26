@@ -29,7 +29,7 @@ void slot_set_init(void);
 // 增加一个slot_set
 void slot_set_add(void);
 // 释放一个slot_set
-void slot_set_remove(slot_set_t *slot);
+int slot_set_remove(slot_set_t *slot);
 
 // 分配一个slot
 void slot_alloc(slot_set_t **slot, unsigned int *index);
@@ -45,19 +45,19 @@ void slot_invalid_cache(slot_set_t *slot, unsigned int index);
  * 程序执行流执行到断点时,会触发该断点绑定的相应事件
  *  __builtin_ffs
  **/
-
-struct breakpoint_header {
+struct breakpoint {
   addr_t address;                 // 断点位置
-  uint_least8_t attr;             // 断点属性
+  uint32_t attr;                  // 断点属性
   struct rb_node breakpoint_tree; // 通过红黑树找到该对象
   // XXX 是否要增加锁?
 };
+typedef struct breakpoint breakpoint_t;
 
 typedef struct breakpoint_return breakpoint_return_t;
 
-struct breakpoint {
+struct breakpoint_normal {
   // breakpoint header
-  struct breakpoint_header header_;
+  breakpoint_t header_;
 
   instr_t instruction; // 断点位置原来的指令
   unsigned int instr_length; // 指令长度,x86下需要, ARM和AARCH64不需要该字段
@@ -66,18 +66,18 @@ struct breakpoint {
   slot_set_t *slot_set;
   unsigned int slot_index;
 
-  object_t *obj;             // 该断点所处的object
-  breakpoint_return_t *trace_return; // trace模式下的函数返回hook
+  object_t *obj;                     // 该断点所处的object
+  breakpoint_return_t *bp_return;    // trace模式下的函数返回hook
   struct list_head breakpoint_chain; // 通过object找到该对象
 };
-typedef struct breakpoint breakpoint_t;
+typedef struct breakpoint_normal breakpoint_normal_t;
 
 // 函数trace的返回断点
 struct breakpoint_return {
   // breakpoint header
-  struct breakpoint_header header_;
+  breakpoint_t header_;
 
-  breakpoint_t *trace_enter; // 该trace的进入点
+  breakpoint_t *bp_enter; // 该trace的进入点
 };
 
 /**
@@ -87,12 +87,13 @@ struct breakpoint_return {
  * trace: 跟踪类型的断点,一般跟踪函数执行的时间,该断点一般在函数开头,
  *        函数进入和返回时,打印时间,并计算时间差。（实际上，一定要在函数开头，如果一个函数中出现两个trace的断点，
  *        那么返回的时候将会出现问题，所以要保证函数中只能出现一个trace类型的断点）
+ * return: 是否是breakpoint_return_类型
  * enable: 是否启用该断点
  **/
 #define BKPT_ATTR(F)                                                           \
   F(ENABLE)                                                                    \
+  F(RETURN)                                                                    \
   F(EVENT)                                                                     \
-  F(TRACE)                                                                     \
   F(NO_SLOT)
 
 #define BKPT_ATTR_OFFSET(name) BKPT_ATTR_OFFSET_##name,
@@ -121,7 +122,8 @@ BKPT_ATTR(BKPT_ATTR_FUN)
 #undef BKPT_ATTR_FUN
 
 // 创建一个断点对象
-breakpoint_t *breakpoint_new(void);
+breakpoint_normal_t *breakpoint_normal_new(void);
+breakpoint_return_t *breakpoint_return_new(void);
 // 查找给定地址上面的断点
 breakpoint_t *breakpoint_find(addr_t addr);
 // 增加一个断点

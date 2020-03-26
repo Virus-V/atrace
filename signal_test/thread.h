@@ -21,8 +21,6 @@ typedef struct thread {
     breakpoint_t *active_bp;
     // context stack
     struct list_head thread_list_entry_;
-
-    long pg_size_;  // 页大小
 } thread_t;
 
 // 初始化线程map

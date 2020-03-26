@@ -30,20 +30,6 @@ thread_new(void)
       abort();
     }
 
-    thread->pg_size_ = sysconf(_SC_PAGESIZE);
-    assert(thread->pg_size_ > 0);
-    // 分配内存区域
-    thread->code_cache_ = mmap(
-        NULL, thread->pg_size_,
-        PROT_READ | PROT_WRITE | PROT_EXEC,
-        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0
-    );
-
-    if (!thread->code_cache_) {
-        perror("mmap");
-        abort();
-    }
-
     INIT_LIST_HEAD(&thread->thread_list_entry_);
 
     return thread;
@@ -55,10 +41,6 @@ thread_del(thread_t *thread)
 {
     assert(thread != NULL);
     assert(list_empty(&thread->thread_list_entry_));
-    assert(thread->code_cache_ != NULL);
-
-    // 取消映射内存区域
-    munmap(thread->code_cache_, thread->pg_size_);
 
     free(thread);
 }
@@ -137,19 +119,3 @@ thread_map_find(pid_t thread_id)
 
     return pos;
 }
-
-// 线程绑定一个breakpoint
-void
-thread_active_breakpoint(thread_t *thread)
-{
-    assert(thread != NULL);
-    assert(thread->active_bp != NULL);
-
-    // 将原指令拷贝到code cache
-    *((volatile instr_t *)thread->code_cache_) = thread->active_bp->instruction;
-    // 指令末尾增加断点指令
-    *((volatile instr_t *)thread->code_cache_ + 1) = (instr_t)0xD4200060;  // brk #0x03
-    // 刷新icache
-    __builtin___clear_cache(thread->code_cache_, (void *)((unsigned char *)thread->code_cache_+thread->pg_size_));
-}
-
