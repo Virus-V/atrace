@@ -17,7 +17,7 @@ typedef struct object object_t;
 // 指令槽集合
 struct slot_set {
   unsigned int free_slot[SLOT_MAP_LEN]; // 1代表空闲
-  unsigned int used_slot_count;
+  int used_slot_count;
   uintptr_t slots;
   pthread_mutex_t lock;
   struct list_head slot_set_list;
@@ -29,10 +29,10 @@ void slot_set_init(void);
 // 增加一个slot_set
 void slot_set_add(void);
 // 释放一个slot_set
+void slot_set_remove(slot_set_t *slot);
 
 // 分配一个slot
-// 成功0 失败非零
-int slot_alloc(slot_set_t **slot, unsigned int *index);
+void slot_alloc(slot_set_t **slot, unsigned int *index);
 
 // 释放指定索引的slot
 void slot_free(slot_set_t *slot, unsigned int index);

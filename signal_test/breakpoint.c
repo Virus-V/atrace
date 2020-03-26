@@ -19,14 +19,14 @@ static pthread_mutex_t breakpoint_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_rwlock_t slot_sets_lock = PTHREAD_RWLOCK_INITIALIZER;
 static struct list_head slot_sets;
 
-void 
+void
 slot_set_init(void)
 {
   INIT_LIST_HEAD(&slot_sets);
   slot_set_add();
 }
 
-void 
+void
 slot_set_add(void)
 {
   slot_set_t *slot;
@@ -52,7 +52,7 @@ slot_set_add(void)
     perror("mmap");
     abort();
   }
-  
+
   slot->slots = (uintptr_t)map_ptr;
 
   // 插入到链表头
@@ -61,15 +61,27 @@ slot_set_add(void)
   pthread_rwlock_unlock(&slot_sets_lock);
 }
 
-int
+void
+slot_set_remove(slot_set_t *slot)
+{
+  assert(slot != NULL);
+
+}
+
+void
 slot_alloc(slot_set_t **slot, unsigned int *index)
 {
   slot_set_t *curr;
-  int idx = 0, pos;
+  int idx, pos;
+
+retry:
+  idx = 0;
   // 遍历slot_sets链表，找到第一个非空的slot_set
   pthread_rwlock_rdlock(&slot_sets_lock);
   list_for_each_entry(curr, &slot_sets, slot_set_list) {
+    pthread_mutex_lock(&curr->lock);
     if (curr->used_slot_count == SLOT_NUM) {
+      pthread_mutex_unlock(&curr->lock);
       continue;
     }
 
@@ -77,19 +89,56 @@ slot_alloc(slot_set_t **slot, unsigned int *index)
       if (curr->free_slot[idx] == 0) {
         continue;
       }
-      // TODO
-      pos = __builtin_ffs(curr->free_slot[idx]) + idx * UINT_BIT_NUM;
+      // 获得当前最低位的1, __builtin_ffs(0x1) => 1
+      pos = __builtin_ffs(curr->free_slot[idx]);
+      if ((pos + idx * UINT_BIT_NUM) > SLOT_NUM) {
+        // 当前pos大于slot_num,表示到达了末尾
+        break;
+      }
+      pos--;  // 修正为偏移
+      goto out;
     }
 
-    goto out;
+    pthread_mutex_unlock(&curr->lock);
   }
+  // 找不到空闲的slot, 创建slot_set
+  pthread_rwlock_unlock(&slot_sets_lock);
+  // FIXME 可能会增加两个slot_set
+  slot_set_add();
+  goto retry;
+
 out:
   pthread_rwlock_unlock(&slot_sets_lock);
-  // 从free_slot bitmap中找到第一个为1的位，然后返回索引
-  
-  // 判断索引是否越界
-  // 将位清零，然后返回相应的位
-  
+  // 将pos对应的二进制位清零
+  curr->free_slot[idx] &= ~(0x1 << pos);
+  curr->used_slot_count++;
+  pthread_mutex_unlock(&curr->lock);
+
+  *slot = curr;
+  *index = idx * UINT_BIT_NUM + pos;
+}
+
+// 释放一个slot
+void
+slot_free(slot_set_t *slot, unsigned int index)
+{
+  assert(slot != NULL);
+  assert(index < UINT_BIT_NUM);
+  int idx, pos;
+
+  idx = index / UINT_BIT_NUM;
+  pos = index % UINT_BIT_NUM;
+
+  pthread_mutex_lock(&slot->lock);
+  if (slot->free_slot[idx] & (0x1 << pos)) {
+    pthread_mutex_unlock(&slot->lock);
+    return;
+  }
+  // 将相应的位置1
+  slot->free_slot[idx] |= 0x1 << pos;
+  slot->used_slot_count--;
+  assert(slot->used_slot_count >= 0);
+  pthread_mutex_unlock(&slot->lock);
 }
 
 breakpoint_t *
