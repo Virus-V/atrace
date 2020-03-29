@@ -28,7 +28,11 @@
 typedef uintptr_t addr_t;
 // 储存一个指令
 typedef uint32_t instr_t;
-// 原子计数
-typedef int atomic_cnt_t;
+
+// 无锁增加计数
+#define LOCKFREE_REF_INC(ptr) __sync_add_and_fetch(ptr, 1)
+
+// 无锁减少计数
+#define LOCKFREE_REF_DEC(ptr) __sync_sub_and_fetch(ptr, 1)
 
 #endif

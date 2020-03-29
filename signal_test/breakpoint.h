@@ -17,67 +17,48 @@ typedef struct object object_t;
 // 指令槽集合
 struct slot_set {
   unsigned int free_slot[SLOT_MAP_LEN]; // 1代表空闲
-  int used_slot_count;
+  unsigned int used_slot_count;
   uintptr_t slots;
   pthread_mutex_t lock;
   struct list_head slot_set_list;
 };
 typedef struct slot_set slot_set_t;
 
+// 获得slot对应的偏移
+#define GET_SLOT_OFFSET(sptr,idx) ((sptr)->slots + (idx)*SLOT_SIZE)
+
 // 初始化slot set
 void slot_set_init(void);
-// 增加一个slot_set
-void slot_set_add(void);
-// 释放一个slot_set
-int slot_set_remove(slot_set_t *slot);
-
-// 分配一个slot
-void slot_alloc(slot_set_t **slot, unsigned int *index);
-
-// 释放指定索引的slot
-void slot_free(slot_set_t *slot, unsigned int index);
-
-// 刷新相关slot的icache
-void slot_invalid_cache(slot_set_t *slot, unsigned int index);
+void slot_set_deinit(void);
 
 /**
  * 断点其实是一个事件触发器,动态的插在程序中
  * 程序执行流执行到断点时,会触发该断点绑定的相应事件
  *  __builtin_ffs
  **/
-struct breakpoint {
-  addr_t address;                 // 断点位置
-  uint32_t attr;                  // 断点属性
-  struct rb_node breakpoint_tree; // 通过红黑树找到该对象
-  // XXX 是否要增加锁?
-};
 typedef struct breakpoint breakpoint_t;
+struct bp_entry {
+  addr_t address;                 // 断点位置
+  struct rb_node rb_node; // 通过红黑树找到该对象
 
-typedef struct breakpoint_return breakpoint_return_t;
+  breakpoint_t *bkpt; // 断点对象
+};
 
-struct breakpoint_normal {
-  // breakpoint header
-  breakpoint_t header_;
-
-  instr_t instruction; // 断点位置原来的指令
-  unsigned int instr_length; // 指令长度,x86下需要, ARM和AARCH64不需要该字段
+struct breakpoint {
+  pthread_mutex_t lock;
+  uint32_t attr;  // 断点属性
+  
+  // 指令长度。变长指令集中需要该字段
+  //unsigned int instr_length; 
+  struct bp_entry bp_enter; // event或者trace的入口断点
+  struct bp_entry bp_return;  // 断点返回和函数返回值
 
   // 指令slot的索引
   slot_set_t *slot_set;
   unsigned int slot_index;
 
   object_t *obj;                     // 该断点所处的object
-  breakpoint_return_t *bp_return;    // trace模式下的函数返回hook
-  struct list_head breakpoint_chain; // 通过object找到该对象
-};
-typedef struct breakpoint_normal breakpoint_normal_t;
-
-// 函数trace的返回断点
-struct breakpoint_return {
-  // breakpoint header
-  breakpoint_t header_;
-
-  breakpoint_t *bp_enter; // 该trace的进入点
+  struct list_head breakpoint_chain;   // 通过object找到该对象
 };
 
 /**
@@ -88,11 +69,10 @@ struct breakpoint_return {
  *        函数进入和返回时,打印时间,并计算时间差。（实际上，一定要在函数开头，如果一个函数中出现两个trace的断点，
  *        那么返回的时候将会出现问题，所以要保证函数中只能出现一个trace类型的断点）
  * return: 是否是breakpoint_return_类型
- * enable: 是否启用该断点
+ * enable: 该断点是否激活 
  **/
 #define BKPT_ATTR(F)                                                           \
   F(ENABLE)                                                                    \
-  F(RETURN)                                                                    \
   F(EVENT)                                                                     \
   F(NO_SLOT)
 
@@ -122,19 +102,18 @@ BKPT_ATTR(BKPT_ATTR_FUN)
 #undef BKPT_ATTR_FUN
 
 // 创建一个断点对象
-breakpoint_normal_t *breakpoint_normal_new(void);
-breakpoint_return_t *breakpoint_return_new(void);
+breakpoint_t *breakpoint_new(void);
 // 查找给定地址上面的断点
 breakpoint_t *breakpoint_find(addr_t addr);
 // 增加一个断点
 int breakpoint_add(breakpoint_t *bkpt);
 // 移除一个断点
-int breakpoint_remove(breakpoint_t *bkpt);
+int breakpoint_remove(addr_t address);
 
 // 启用一个断点对象
-int breakpoint_enable(breakpoint_t *bkpt);
+int breakpoint_enable(addr_t address);
 
 // 停用一个断点对象
-int breakpoint_disable(breakpoint_t *bkpt);
+int breakpoint_disable(addr_t address);
 
 #endif
