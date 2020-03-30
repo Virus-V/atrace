@@ -260,7 +260,7 @@ breakpoint_rb_search_insert(struct bp_entry *entry)
     pthread_mutex_unlock(&breakpoint_lock);
     return -1;
   }
-
+  // 前面已经判断过 树中不存在该key了
   breakpoint_rb_insert_internal(entry);
   pthread_mutex_unlock(&breakpoint_lock);
 

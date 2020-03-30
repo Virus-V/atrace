@@ -17,8 +17,8 @@ typedef struct breakpoint breakpoint_t;
  **/
 typedef struct thread {
     pid_t tid;
-    // 当前激活的断点
-    breakpoint_t *active_bp;
+    // 当前单步的断点
+    breakpoint_t *singlestep_bp;
     // context stack
     struct list_head thread_list_entry_;
 } thread_t;

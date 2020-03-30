@@ -40,10 +40,10 @@ set_sighandle(void(*handle)(int , siginfo_t *, void *))
 void
 sigtrap_handler(int signo, siginfo_t *sinfo, void *context)
 {
-  struct timeval tv;
   ucontext_t *uc = (ucontext_t *)context;
   pid_t thread_id = get_tid();
   thread_t *thread = NULL;
+  breakpoint_t *bp = NULL;
 
   thread = thread_map_find(thread_id);
   if (!thread) {
@@ -53,12 +53,32 @@ sigtrap_handler(int signo, siginfo_t *sinfo, void *context)
     printf("new thread: %d\n", thread_id);
   }
 
-  gettimeofday(&tv, NULL);
+  // 查找当前断点对象
+  bp = breakpoint_find((addr_t)uc->uc_mcontext.pc);
+  assert(bp != NULL);
 
-  printf("%d: in handle: %d.%d\n", get_tid(), tv.tv_sec, tv.tv_usec);
-  printf("addr:%p\n", uc->uc_mcontext.pc);
-  // 跳过断点指令
-  uc->uc_mcontext.pc += 4;
+  pthread_mutex_lock(&bp->lock);
+  if (thread->singlestep_bp != NULL) {
+    struct timeval tv;
+    uintptr_t bp_addr = bp->bp_enter.address;
+
+    pthread_mutex_unlock(&bp->lock);
+
+    assert(thread->singlestep_bp == bp);
+    // 指向到断点指令的下一个指令
+    uc->uc_mcontext.pc = bp_addr + 4;
+    thread->singlestep_bp = NULL;
+
+    // 打印当前时间
+    gettimeofday(&tv, NULL);
+
+    printf("tid:%d\t0x%p\t%d.%d\n", thread_id, bp_addr, tv.tv_sec, tv.tv_usec);
+  } else {  // 第一次到断点
+    thread->singlestep_bp = bp;
+    // 指向指令slot
+    uc->uc_mcontext.pc = BP_GET_SLOT_OFFSET(bp->slot_set, bp->slot_index);
+    pthread_mutex_unlock(&bp->lock);
+  }
 }
 
 // 入口点断点对象
@@ -88,7 +108,7 @@ entrypoint_trap_handler(int signo, siginfo_t *sinfo, void *context)
   if (entry_hit){
     // 切换到trap handle
     set_sighandle(sigtrap_handler);
-    thread->active_bp = NULL;
+    thread->singlestep_bp = NULL;
     // 信号返回地址修正为断点指令的下一个指令
     uc->uc_mcontext.pc = entry_bp->bp_enter.address + 4;
     printf("single step finish..\n");
@@ -97,7 +117,7 @@ entrypoint_trap_handler(int signo, siginfo_t *sinfo, void *context)
     object_load();
 
     entry_hit = 1;
-    thread->active_bp = entry_bp;
+    thread->singlestep_bp = entry_bp;
     // 修正信号返回地址为线程断点上下文地址
     uc->uc_mcontext.pc = BP_GET_SLOT_OFFSET(entry_bp->slot_set, entry_bp->slot_index);
     printf("enter to single step..\n");

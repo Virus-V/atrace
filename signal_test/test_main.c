@@ -11,7 +11,7 @@
 
 #define get_tid() syscall(SYS_gettid)
 
-#define MAX_THREAD 1
+#define MAX_THREAD 10
 
 volatile int exit_flag = 0;
 
