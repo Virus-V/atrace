@@ -10,7 +10,7 @@
  **/
 #define THREAD_MAP_SIZE 64
 
-typedef struct breakpoint breakpoint_t;
+typedef struct bp_base breakpoint_t;
 
 /**
  * 线程对象
@@ -18,7 +18,7 @@ typedef struct breakpoint breakpoint_t;
 typedef struct thread {
     pid_t tid;
     // 当前激活的断点
-    breakpoint_t *active_bp;
+    bp_base_t *active_bp;
     // context stack
     struct list_head thread_list_entry_;
 } thread_t;
@@ -35,7 +35,5 @@ int thread_map_add(thread_t *thread);
 thread_t *thread_map_del(pid_t thread_id);
 // 查找线程对象
 thread_t *thread_map_find(pid_t thread_id);
-// 线程绑定一个breakpoint
-void thread_active_breakpoint(thread_t *thread);
 
 #endif

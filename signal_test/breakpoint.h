@@ -25,7 +25,7 @@ struct slot_set {
 typedef struct slot_set slot_set_t;
 
 // 获得slot对应的偏移
-#define GET_SLOT_OFFSET(sptr,idx) ((sptr)->slots + (idx)*SLOT_SIZE)
+#define BP_GET_SLOT_OFFSET(sptr,idx) ((sptr)->slots + (idx)*SLOT_SIZE)
 
 // 初始化slot set
 void slot_set_init(void);
@@ -73,7 +73,7 @@ struct breakpoint {
  **/
 #define BKPT_ATTR(F)                                                           \
   F(ENABLE)                                                                    \
-  F(EVENT)                                                                     \
+  F(TRACE)                                                                     \
   F(NO_SLOT)
 
 #define BKPT_ATTR_OFFSET(name) BKPT_ATTR_OFFSET_##name,
@@ -111,9 +111,9 @@ int breakpoint_add(breakpoint_t *bkpt);
 int breakpoint_remove(addr_t address);
 
 // 启用一个断点对象
-int breakpoint_enable(addr_t address);
+int breakpoint_enable(breakpoint_t *bkpt);
 
 // 停用一个断点对象
-int breakpoint_disable(addr_t address);
+int breakpoint_disable(breakpoint_t *bkpt);
 
 #endif

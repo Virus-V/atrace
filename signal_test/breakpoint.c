@@ -214,6 +214,8 @@ breakpoint_rb_insert_internal(struct bp_entry *entry)
   struct rb_node **tmp, *parent = NULL;
   struct bp_entry *bp;
 
+  assert(RB_EMPTY_NODE(&entry->rb_node));
+
   tmp = &breakpoints.rb_node;
   while (*tmp) {
     bp = container_of(*tmp, struct bp_entry, rb_node);
@@ -318,7 +320,6 @@ breakpoint_add(breakpoint_t *bkpt)
   object_t *obj;
 
   assert(bkpt != NULL);
-  assert(RB_EMPTY_NODE(&bkpt->bp_enter.rb_node) && RB_EMPTY_NODE(&bkpt->bp_return.rb_node));
   assert(list_empty(&bkpt->breakpoint_chain));
 
   pthread_mutex_lock(&bkpt->lock);
@@ -349,7 +350,7 @@ breakpoint_add(breakpoint_t *bkpt)
     assert(bkpt->slot_set != NULL);
 
     // 初始化指令slot
-    instr_ptr = (volatile unsigned int *)GET_SLOT_OFFSET(bkpt->slot_set, bkpt->slot_index);
+    instr_ptr = (volatile unsigned int *)BP_GET_SLOT_OFFSET(bkpt->slot_set, bkpt->slot_index);
     // 拷贝指令数据到slot
     *instr_ptr = *((volatile unsigned int *)bkpt->bp_enter.address);
     *(instr_ptr + 1) = 0xD4200060u; // brk #0x03
@@ -412,56 +413,26 @@ breakpoint_add(breakpoint_t *bkpt)
 // }
 
 // 启用一个断点对象
-// 不可对一个断点并行调用
 int
-breakpoint_enable(addr_t address)
-{
-  bp_base_t *bkpt;
-  breakpoint_t *bp;
-  volatile unsigned int *instr_ptr;
-
-  // 如果断点不存在，则失败
-  bkpt = breakpoint_find(address);
-  if (!bkpt) {
-    return -1;
-  }
+breakpoint_enable(breakpoint_t *bkpt)
+{ 
+  assert(bkpt != NULL);
+  assert(!RB_EMPTY_NODE(&bkpt->bp_enter.rb_node));
 
   pthread_mutex_lock(&bkpt->lock);
-  // 如果是return类型的，直接返回，不需要enable
-  if (breakpoint_attr_flag_RETURN(bkpt)) {
-    pthread_mutex_unlock(&bkpt->lock);
-    return 0;
-  }
-
   if (breakpoint_attr_flag_ENABLE(bkpt)) {
     pthread_mutex_unlock(&bkpt->lock);
     return 0;
   }
-
   // 设置使能标志位
   breakpoint_attr_set_ENABLE(bkpt);
 
-  bp = (breakpoint_t *)bkpt;
-
-  // 分配指令slot
-  slot_alloc(&bp->slot_set, &bp->slot_index);
-  assert(bp->slot_set != NULL);
-  // 初始化指令slot
-  instr_ptr = (volatile unsigned int *)GET_SLOT_OFFSET(bp->slot_set, bp->slot_index);
-  // 拷贝指令数据到slot
-  *instr_ptr = *((volatile unsigned int *)bkpt->address);
-  *(instr_ptr + 1) = 0xD4200060u; // brk #0x03
-
-  // 刷新icache
-  slot_invalid_cache(bp->slot_set, bp->slot_index);
-
-  // NOTIC 实际修改指令之前，要保证前面工作已经就位
   // 去除text地址写保护
-  object_memory_unlock(bp->obj);
+  object_memory_unlock(bkpt->obj);
   // 替换断点指令
-  *((volatile unsigned int *)bkpt->address) = 0xD4200060;  // brk #0x03
+  *((volatile unsigned int *)bkpt->bp_enter.address) = 0xD4200060;  // brk #0x03
   // 增加写保护, 并flush icache
-  object_memory_lock(bp->obj);
+  object_memory_lock(bkpt->obj);
 
   pthread_mutex_unlock(&bkpt->lock);
 
@@ -470,42 +441,31 @@ breakpoint_enable(addr_t address)
 
 // 停用一个断点对象
 int
-breakpoint_disable(addr_t address)
+breakpoint_disable(breakpoint_t *bkpt)
 {
-  bp_base_t *bkpt;
-  breakpoint_t *bp;
+  volatile unsigned int *instr_ptr;
 
-  // 如果断点不存在，则失败
-  bkpt = breakpoint_find(address);
-  if (!bkpt) {
-    return -1;
-  }
+  assert(bkpt != NULL);
+  assert(!RB_EMPTY_NODE(&bkpt->bp_enter.rb_node));
 
   pthread_mutex_lock(&bkpt->lock);
-  // 如果是return类型，不可以disable
-  if (breakpoint_attr_flag_RETURN(bkpt)) {
-    pthread_mutex_unlock(&bkpt->lock);
-    return -1;
-  }
-  
+
   // 如果当前已经是disable状态了
   if (!breakpoint_attr_flag_ENABLE(bkpt)) {
     pthread_mutex_unlock(&bkpt->lock);
     return 0;
   }
 
-  bp = (breakpoint_t *)bkpt;
-  
-  // 去除text地址写保护
-  object_memory_unlock(bp->obj);
-  // 恢复原有指令 此处写入要是原子的, 也就是要发出一次总线请求
-  *((volatile instr_t *)bkpt->address) = bp->instruction;
-  // 增加写保护, 并flush icache
-  object_memory_lock(bp->obj);
-
-  // TODO 释放指令slot
-
   breakpoint_attr_clr_ENABLE(bkpt);
+
+  instr_ptr = (volatile unsigned int *)BP_GET_SLOT_OFFSET(bkpt->slot_set, bkpt->slot_index);
+
+  // 去除text地址写保护
+  object_memory_unlock(bkpt->obj);
+  // 恢复原有指令 此处写入要是原子的, 也就是要发出一次总线请求
+  *((volatile unsigned int *)bkpt->bp_enter.address) = *instr_ptr;
+  // 增加写保护, 并flush icache
+  object_memory_lock(bkpt->obj);
 
   pthread_mutex_unlock(&bkpt->lock);
 

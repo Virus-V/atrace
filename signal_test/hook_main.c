@@ -90,7 +90,7 @@ entrypoint_trap_handler(int signo, siginfo_t *sinfo, void *context)
     set_sighandle(sigtrap_handler);
     thread->active_bp = NULL;
     // 信号返回地址修正为断点指令的下一个指令
-    uc->uc_mcontext.pc = entry_bp->address + 4;
+    uc->uc_mcontext.pc = entry_bp->bp_enter.address + 4;
     printf("single step finish..\n");
   } else {
     // 重新加载object
@@ -98,11 +98,8 @@ entrypoint_trap_handler(int signo, siginfo_t *sinfo, void *context)
 
     entry_hit = 1;
     thread->active_bp = entry_bp;
-
-    // 在当前线程上下文构建断点执行环境
-    thread_active_breakpoint(thread);
     // 修正信号返回地址为线程断点上下文地址
-    uc->uc_mcontext.pc = thread->code_cache_;
+    uc->uc_mcontext.pc = BP_GET_SLOT_OFFSET(entry_bp->slot_set, entry_bp->slot_index);
     printf("enter to single step..\n");
   }
 }
@@ -128,9 +125,9 @@ lib_init(void)
   entry_point = object_get_self_entrypoint();
   printf("app entry point: %p\n", entry_point);
 
+  // 在入口点处打上断点
   entry_bp = breakpoint_new();
-  entry_bp->address = entry_point;
-  breakpoint_attr_set_EVENT(entry_bp);
+  entry_bp->bp_enter.address = entry_point;
 
   // 增加断点
   if (breakpoint_add(entry_bp)) {
@@ -148,8 +145,8 @@ lib_init(void)
   do {
     object_t *obj = entry_bp->obj;
     breakpoint_t *bkp = breakpoint_new();
-    bkp->address = obj->text_start + 0xdac;
-    printf("patch address: %lx\n", bkp->address);
+    bkp->bp_enter.address = obj->text_start + 0xdac;
+    printf("patch address: %lx\n", bkp->bp_enter.address);
 
     if (breakpoint_add(bkp)) {
       printf("hook bkp failed!\n");
