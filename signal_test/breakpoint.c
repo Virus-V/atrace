@@ -252,7 +252,6 @@ breakpoint_rb_insert(struct bp_entry *entry)
 static int
 breakpoint_rb_search_insert(struct bp_entry *entry)
 {
-  int ret;
   struct bp_entry *exist;
 
   pthread_mutex_lock(&breakpoint_lock);
@@ -265,7 +264,7 @@ breakpoint_rb_search_insert(struct bp_entry *entry)
   breakpoint_rb_insert_internal(entry);
   pthread_mutex_unlock(&breakpoint_lock);
 
-  return ret;
+  return 0;
 }
 
 // 将addr断点从红黑树中删除，并返回原对象
@@ -337,7 +336,7 @@ breakpoint_add(breakpoint_t *bkpt)
   }
 
   // 插入到红黑树中
-  if (breakpoint_rb_search_insert(&bkpt->bp_enter) ) {
+  if (breakpoint_rb_search_insert(&bkpt->bp_enter)) {
     pthread_mutex_unlock(&bkpt->lock);
     return -3;
   }
